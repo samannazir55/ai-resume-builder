@@ -1,15 +1,19 @@
-entrypoint = "main.py"
-modules = ["python-3.11"]
-
-[nix]
-channel = "stable-24_05"
-
-[unitTest]
-language = "python3"
-
-[gitHubImport]
-requiredFiles = [".replit", "replit.nix"]
+[build]
+run = "pip install -r requirements.txt"
 
 [deployment]
-run = ["python3", "main.py"]
+run = "uvicorn main:app --host 0.0.0.0 --port 8000"
 deploymentTarget = "cloudrun"
+
+[nix]
+channel = "stable-23.05"
+
+[languages]
+[languages.python]
+pattern = "**/*.py"
+[languages.python.languageServer]
+start = "pylsp"
+
+[[ports]]
+localPort = 8000
+externalPort = 80
