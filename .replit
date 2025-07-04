@@ -1,31 +1,15 @@
-[build]
-run = "pip install -r requirements.txt"
-
-[deployment]
-run = "uvicorn main:app --host 0.0.0.0 --port 8000"
-deploymentTarget = "cloudrun"
+entrypoint = "main.py"
+modules = ["python-3.11"]
 
 [nix]
-channel = "stable-23.05"
+channel = "stable-24_05"
 
-[languages]
-[languages.python]
-pattern = "**/*.py"
-[languages.python.languageServer]
-start = "pylsp"
+[unitTest]
+language = "python3"
 
-[[ports]]
-localPort = 8000
-externalPort = 80
+[gitHubImport]
+requiredFiles = [".replit", "replit.nix"]
 
-[workflows]
-runButton = "Run FastAPI Server"
-
-[[workflows.workflow]]
-name = "Run FastAPI Server"
-author = 44532759
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "nix-shell --run \"python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload\""
+[deployment]
+run = ["python3", "main.py"]
+deploymentTarget = "cloudrun"
