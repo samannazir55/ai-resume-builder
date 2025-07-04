@@ -232,7 +232,7 @@ app.add_middleware(
 
 # Security
 security = HTTPBearer()
-JWT_SECRET = "your-secret-key-change-in-production"
+JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key-change-in-production")
 
 # Pydantic models
 class UserCreate(BaseModel):
@@ -546,10 +546,11 @@ async def export_cv_pdf(cv_id: int, current_user: dict = Depends(get_current_use
 
     # Generate PDF
     filename = f"cv_{cv_id}_{uuid.uuid4().hex[:8]}.pdf"
-    filepath = f"temp/{filename}"
-
+    
     # Create temp directory
-    os.makedirs("temp", exist_ok=True)
+    temp_dir = "temp"
+    os.makedirs(temp_dir, exist_ok=True)
+    filepath = os.path.join(temp_dir, filename)
 
     # Create PDF
     doc = SimpleDocTemplate(filepath, pagesize=letter)
@@ -585,9 +586,11 @@ async def export_cv_pdf(cv_id: int, current_user: dict = Depends(get_current_use
         skills_text = ', '.join(data['skills']) if isinstance(data['skills'], list) else data['skills']
         story.append(Paragraph(skills_text, styles['Normal']))
 
-    doc.build(story)
-
-    return FileResponse(filepath, media_type='application/pdf', filename=filename)
+    try:
+        doc.build(story)
+        return FileResponse(filepath, media_type='application/pdf', filename=filename)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

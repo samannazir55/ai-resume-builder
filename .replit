@@ -17,3 +17,15 @@ start = "pylsp"
 [[ports]]
 localPort = 8000
 externalPort = 80
+
+[workflows]
+runButton = "Run FastAPI Server"
+
+[[workflows.workflow]]
+name = "Run FastAPI Server"
+author = 44532759
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
