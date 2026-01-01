@@ -1,0 +1,24 @@
+# 1. SECURITY (DO NOT UPLOAD THESE)
+.env
+.env.local
+backend/.env
+backend/cv_builder.db
+backend/cv_builder_local.db
+
+# 2. PYTHON TRASH
+__pycache__/
+*.pyc
+venv/
+env/
+.pytest_cache/
+
+# 3. NODE/REACT TRASH (Heavy)
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.vite/
+
+# 4. OS TRASH
+.DS_Store
+Thumbs.db
+.vscode/

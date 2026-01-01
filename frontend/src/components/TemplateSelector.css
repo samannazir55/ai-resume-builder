@@ -1,0 +1,97 @@
+/* --- START OF FILE TemplateSelector.css --- */
+
+.template-selector-container {
+    width: 100%;
+    margin-bottom: 2rem;
+    overflow: hidden;
+    background: #ffffff !important;
+    padding: 16px;
+    border-radius: 8px;
+    /* This prevents CSS from inside the container affecting outside, and vice versa in some contexts */
+    isolation: isolate; 
+}
+
+.template-grid {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    overflow-x: auto;
+    padding: 15px;
+    padding-bottom: 25px;
+    scroll-behavior: smooth;
+    white-space: nowrap;
+}
+
+.template-card {
+    min-width: 140px;
+    width: 140px;
+    height: 220px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: white !important;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+    border: 3px solid transparent;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Ensure content doesn't spill */
+}
+
+.template-card:hover { 
+    transform: translateY(-5px); 
+    border-color: #667eea;
+}
+
+.template-card.active { 
+    border-color: #667eea !important; 
+    transform: scale(1.05); 
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.template-preview-image {
+    flex: 1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    font-size: 30px; 
+    /* Force white text, use !important to override any global 'div { color: ... }' */
+    color: #ffffff !important; 
+    font-weight: 800;
+    border-radius: 8px 8px 0 0;
+}
+
+.template-name {
+    padding: 10px; 
+    font-size: 12px; 
+    font-weight: bold; 
+    text-align: center;
+    background: #fff !important;
+    /* Force dark text, ignoring the 'Text Color' picker of the CV */
+    color: #2d3748 !important; 
+    white-space: normal;
+    border-radius: 0 0 8px 8px;
+}
+
+.premium-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 16px;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000 !important; /* Force badge text black */
+}
+
+/* Scrollbar styling remains the same... */
+.template-grid::-webkit-scrollbar { height: 8px; }
+.template-grid::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+.template-grid::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+.template-grid::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

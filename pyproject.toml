@@ -2,8 +2,19 @@
 name = "python-template"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Saman <samannazir55@gmail.com>>"]
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.14",
 ]
+[tool.poetry]
+name = "resume-builder"
+version = "0.1.0"
+description = ""
+authors = ["Saman <samannazir55@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"  
+fastapi = "^0.115.14"
+pyjwt = "^2.10.1"
+transformers = "^4.53.0"

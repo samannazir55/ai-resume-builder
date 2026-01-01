@@ -1,0 +1,52 @@
+.main-content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+    width: 100vw !important;
+    margin-left: calc(-50vw + 50%) !important;
+    padding: 0 2rem;
+    box-sizing: border-box;
+}
+
+/* Responsive design for mobile */
+@media (max-width: 768px) {
+    .main-content-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+        padding: 0 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content-grid {
+        padding: 0 0.5rem;
+    }
+}
+
+/* For very large screens */
+@media (min-width: 1600px) {
+    .main-content-grid {
+        padding: 0 4rem;
+    }
+}
+/* Make template selector full width */
+.template-selector,
+.template-section,
+.cv-template-selector,
+.header-section,
+.app-main-header {
+    width: 100vw !important;
+    margin-left: calc(-50vw + 50%) !important;
+    padding: 2rem !important;
+    box-sizing: border-box !important;
+}
+
+/* If it's inside a container, override that too */
+.template-container,
+.header-container {
+    width: 100vw !important;
+    margin-left: calc(-50vw + 50%) !important;
+    max-width: none !important;
+    padding: 0 !important;
+}

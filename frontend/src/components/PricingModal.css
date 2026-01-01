@@ -1,0 +1,51 @@
+
+.pricing-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(5px);
+    z-index: 9999;
+    display: flex; justify-content: center; align-items: center;
+}
+
+.pricing-content {
+    background: white;
+    width: 100%; max-width: 800px;
+    border-radius: 20px;
+    padding: 40px;
+    position: relative;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.close-btn { position: absolute; top: 15px; right: 20px; font-size: 28px; background: none; border: none; cursor: pointer; color: #999; }
+.close-btn:hover { color: #333; }
+
+.pricing-header { text-align: center; margin-bottom: 40px; }
+.pricing-header h2 { margin: 0 0 10px 0; font-size: 28px; color: #1e293b; }
+.pricing-header p { margin: 0; color: #64748b; font-size: 16px; }
+
+.pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
+
+.price-card {
+    border: 1px solid #e2e8f0; border-radius: 12px; padding: 30px;
+    text-align: center; position: relative; transition: 0.2s;
+}
+.price-card.pro { border: 2px solid #667eea; background: #f8fafc; transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+
+.tag { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #94a3b8; margin-bottom: 10px; }
+.tag.popular { color: #667eea; }
+
+.price { font-size: 42px; font-weight: 800; color: #1e293b; margin: 15px 0 25px 0; }
+.price span { font-size: 16px; color: #94a3b8; font-weight: 500; }
+
+.price-card ul { padding: 0; list-style: none; margin-bottom: 30px; text-align: left; margin-left: 20px; }
+.price-card li { margin-bottom: 12px; font-size: 14px; color: #475569; }
+
+.plan-btn { width: 100%; padding: 15px; border-radius: 8px; font-weight: 700; cursor: pointer; border: none; font-size: 16px; }
+.plan-btn.outline { background: #f1f5f9; color: #94a3b8; cursor: default; }
+.plan-btn.fill { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; transition: 0.2s; }
+.plan-btn.fill:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }
+
+.guarantee { text-align: center; font-size: 12px; color: #94a3b8; display: block; margin-top: 20px; }

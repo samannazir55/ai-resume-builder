@@ -1,0 +1,12 @@
+
+.admin-container { padding: 2rem; max-width: 1400px; margin: 0 auto; }
+.admin-header { margin-bottom: 2rem; text-align: center; }
+.admin-header h1 { color: #2c3e50; }
+.admin-grid { display: grid; grid-template-columns: 300px 1fr; gap: 30px; }
+.admin-sidebar { background: white; padding: 20px; border-radius: 8px; height: fit-content; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+.code-box { display: flex; flex-direction: column; flex: 1; height: 100%; margin-bottom: 20px; }
+.code-box textarea { height: 300px; font-family: 'Courier New', monospace; background: #222; color: #bada55; padding: 10px; border-radius: 6px; }
+.publish-btn { background: #27ae60; color: white; width: 100%; padding: 15px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+.status-msg { margin-top: 10px; font-weight: bold; text-align: center; }
+.checkbox-group { border: 1px solid #ddd; padding: 10px; border-radius: 4px; display: flex; align-items: center;}
+.checkbox-group input { width: auto; margin-right: 10px; }

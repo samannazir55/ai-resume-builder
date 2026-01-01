@@ -1,0 +1,292 @@
+/* Preview Container Styling */
+.preview-container {
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  height: fit-content;
+}
+
+.preview-container h2 {
+  background: linear-gradient(135deg, #f8fafc 0%, #e5e7eb 100%);
+  text-align: center;
+  margin: 0;
+  padding: 1.5rem;
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 600;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* CV Document Wrapper */
+.cv-document-wrapper {
+  padding: 1.5rem;
+  background-color: #f8fafc;
+  max-height: 800px;
+  overflow-y: auto;
+}
+
+/* Enhanced CV Modern Template Styling */
+.cv-modern {
+  font-family: 'Inter', 'Segoe UI', sans-serif !important;
+  display: flex;
+  min-height: 700px;
+  margin: 0;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e5e7eb;
+}
+
+.cv-sidebar {
+  width: 280px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+  padding: 2rem 1.5rem;
+  position: relative;
+}
+
+.cv-sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  backdrop-filter: blur(10px);
+}
+
+.cv-sidebar * {
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-header h1 {
+  font-size: 1.5rem !important;
+  margin: 0 0 0.5rem 0 !important;
+  font-weight: 700 !important;
+  color: white !important;
+  letter-spacing: -0.5px;
+}
+
+.job-title {
+  font-size: 1rem !important;
+  margin-bottom: 2rem !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 300 !important;
+  font-style: italic;
+}
+
+.contact-info {
+  margin-bottom: 2rem !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 1.5rem;
+}
+
+.contact-item {
+  display: flex !important;
+  align-items: center !important;
+  margin-bottom: 0.75rem !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-size: 0.9rem !important;
+}
+
+.contact-icon {
+  margin-right: 0.75rem !important;
+  font-size: 1rem !important;
+  opacity: 0.9;
+}
+
+.sidebar-section h3 {
+  color: white !important;
+  font-size: 1.1rem !important;
+  margin-bottom: 1rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.skills-container {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.5rem !important;
+}
+
+.skill-tag {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: white !important;
+  padding: 0.4rem 0.8rem !important;
+  border-radius: 20px !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  transition: all 0.2s ease !important;
+}
+
+.skill-tag:hover {
+  background: rgba(255, 255, 255, 0.35) !important;
+  transform: translateY(-1px) !important;
+}
+
+.cv-main {
+  flex: 1;
+  padding: 2rem;
+  background: #ffffff;
+  color: #1f2937 !important;
+}
+
+.cv-section {
+  margin-bottom: 2rem !important;
+}
+
+.cv-section h2 {
+  color: #2563eb !important;
+  font-size: 1.3rem !important;
+  margin-bottom: 1rem !important;
+  position: relative !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.cv-section h2::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 2px;
+}
+
+.section-content {
+  color: #374151 !important;
+  line-height: 1.7 !important;
+  font-size: 0.95rem !important;
+}
+
+.section-content p {
+  margin-bottom: 0.75rem !important;
+  color: #374151 !important;
+}
+
+.experience-list, .education-list {
+  padding-left: 0 !important;
+  list-style: none !important;
+  margin: 0 !important;
+}
+
+.experience-list li, .education-list li {
+  position: relative !important;
+  padding-left: 1.5rem !important;
+  margin-bottom: 0.75rem !important;
+  color: #374151 !important;
+  line-height: 1.6 !important;
+  font-size: 0.9rem !important;
+}
+
+.experience-list li::before, .education-list li::before {
+  content: '▪' !important;
+  position: absolute !important;
+  left: 0 !important;
+  color: #667eea !important;
+  font-weight: bold !important;
+  font-size: 1.2rem !important;
+}
+
+/* Scrollbar Styling for Document Wrapper */
+.cv-document-wrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.cv-document-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.cv-document-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.cv-document-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Force proper text colors for all elements */
+.cv-modern * {
+  color: inherit !important;
+}
+
+.cv-sidebar * {
+  color: white !important;
+}
+
+.cv-main * {
+  color: #374151 !important;
+}
+
+.cv-section h2 {
+  color: #2563eb !important;
+}
+
+.skill-tag {
+  color: white !important;
+}
+
+.experience-list li::before, .education-list li::before {
+  color: #667eea !important;
+}
+
+/* Error message styling */
+.error-message {
+  background-color: #fee2e2;
+  color: #dc2626;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid #fca5a5;
+}
+
+/* Loading state */
+.loading-template {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Responsive design for CV preview */
+@media (max-width: 768px) {
+  .cv-modern {
+    flex-direction: column;
+    min-height: auto;
+  }
+  
+  .cv-sidebar {
+    width: 100%;
+    padding: 1.5rem;
+  }
+  
+  .cv-main {
+    padding: 1.5rem;
+  }
+  
+  .cv-document-wrapper {
+    padding: 1rem;
+    max-height: 600px;
+  }
+}
+.action-btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 13px; color: white; transition: 0.2s; }
+.pdf-btn { background: #e74c3c; }
+.pdf-btn:hover { background: #c0392b; }
+.doc-btn { background: #2980b9; }
+.doc-btn:hover { background: #2c3e50; }
+.action-btn:disabled { opacity: 0.5; cursor: wait; }
