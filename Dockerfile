@@ -1,38 +1,44 @@
-
-# 1. Use a pre-built image with Python 3.10 AND Node 20
-# This prevents all the "curl/apt-get" errors for installing Node
+# Use a pre-built image with Python 3.10 AND Node 20
 FROM nikolaik/python-nodejs:python3.10-nodejs20
 
 ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
 
-# 2. Install ONLY the PDF libraries (WeasyPrint)
-# We update the package list first to ensure no 404 errors
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install PDF libraries (WeasyPrint dependencies)
+# Fixed: Use sh instead of bash for Render compatibility
+SHELL ["/bin/sh", "-c"]
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     libcairo2 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libgdk-pixbuf2.0-0 \
     libffi-dev \
-    shared-mime-info \
-    && rm -rf /var/lib/apt/lists/*
+    shared-mime-info && \
+    rm -rf /var/lib/apt/lists/*
 
-# 3. Setup Application
+# Setup working directory
 WORKDIR /app
 
-# 4. Install Python Backend Dependencies
-COPY backend/requirements.txt ./
-# We use --timeout to prevent network disconnects during build
-RUN pip install --no-cache-dir -r requirements.txt --timeout 100
+# Install Python dependencies
+COPY backend/requirements.txt ./backend/
+RUN pip install --no-cache-dir --timeout 100 -r backend/requirements.txt
 
-# 5. Copy Code
+# Copy entire project
 COPY . .
 
-# 6. Build React Frontend
+# Build React frontend
 WORKDIR /app/frontend
 ENV CI=false
-RUN npm install
-RUN npm run build
+RUN npm ci --only=production && \
+    npm run build && \
+    npm cache clean --force
 
-# 7. Final Config
+# Return to app root
 WORKDIR /app
+
+# Expose port (Render uses PORT env variable)
+EXPOSE 8000
+
+# Start command
 CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ai-cv-builder
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /docs
+    envVars:
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: your-admin@email.com
+      - key: PORT
+        value: 8000
