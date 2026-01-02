@@ -1,7 +1,9 @@
 
 from sqlalchemy.orm import Session
 from ..models import template as models
-from .seed_data import PERMANENT_TEMPLATES
+# CORRECTION: The seed file is in 'core', not 'crud'. 
+# We use '..' to go up to 'app', then down into 'core'.
+from ..core.seed_data import PERMANENT_TEMPLATES
 
 def sync_templates(db: Session):
     print("🔄 Checking for missing templates...")
@@ -12,7 +14,7 @@ def sync_templates(db: Session):
             new_t = models.Template(**data)
             db.add(new_t)
         else:
-            # OPTIONAL: Force update code on restart to ensure fixes apply
+            # Always update content on restart to ensure fixes apply
             existing.html_content = data["html"]
             existing.css_styles = data["css"]
             
