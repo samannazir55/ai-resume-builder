@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # 4. COPY APP CODE
 COPY backend ./backend
 COPY frontend ./frontend
-COPY app ./app 2>/dev/null || : 
+COPY app ./app/
 # (The line above helps if 'app' folder exists in root, but harmless if not)
 
 # 5. BUILD FRONTEND
