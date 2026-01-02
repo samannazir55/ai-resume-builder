@@ -8,17 +8,15 @@ env_path = Path(__file__).resolve().parent.parent.parent / '.env'
 load_dotenv(env_path)
 load_dotenv() # Backup check in current dir
 
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TextStreamer
 import json
 import re
-import os
 import gc
 from typing import Optional, List, Dict, Any
 from openai import OpenAI
 from ..schemas import ai as ai_schemas
 from ..core.config import settings
 
-# GLOBAL VARS (Local Mode)
+# GLOBAL VARS (Local Mode) - No longer needed but kept for reference
 MODEL_ID = "microsoft/Phi-3-mini-4k-instruct"
 model = None
 tokenizer = None
@@ -166,7 +164,7 @@ def generate_cv_content_from_ai(request: ai_schemas.AIGenerationRequest) -> ai_s
             {{
                 "full_name": "{extracted_regex.get('full_name') or 'Candidate Name'}",
                 "email": "{extracted_regex.get('email') or ''}",
-                "phone": "{extracted_info.get('phone', '') if 'extracted_info' in locals() else ''}", 
+                "phone": "{extracted_regex.get('phone') or ''}", 
                 "desired_job_title": "{request.desired_job_title or 'Professional'}",
                 "professional_summary": "Summary...",
                 "experience_points": ["Achievement 1", "Achievement 2"],
@@ -232,5 +230,9 @@ def generate_full_cv_package(req):
     res = generate_cv_content_from_ai(req)
     if not res.success: return None
     return res.data
-def generate_cv_content(req): return generate_full_cv_package(req)
-def load_model(): pass
+
+def generate_cv_content(req): 
+    return generate_full_cv_package(req)
+
+def load_model(): 
+    pass
