@@ -4,39 +4,47 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from .config import settings
 
-# Setup hashing engine with explicit backend configuration
-# This prevents runtime backend detection issues
+# ========================================
+# BCRYPT 4.x COMPATIBILITY FIX
+# ========================================
+# Passlib expects bcrypt to have __about__.__version__
+# but bcrypt 4.x removed it. We patch it here.
+try:
+    import bcrypt
+    # Check if __about__ exists, if not create it
+    if not hasattr(bcrypt, '__about__'):
+        class About:
+            __version__ = bcrypt.__version__
+        bcrypt.__about__ = About()
+except ImportError:
+    pass
+
+# Setup hashing engine
+# Use bcrypt with explicit backend configuration
 pwd_context = CryptContext(
     schemes=["bcrypt"],
     deprecated="auto",
-    bcrypt__rounds=12,  # Explicit rounds configuration
+    bcrypt__rounds=12,
 )
-
-# Force backend initialization early to catch issues at startup
-try:
-    # Trigger backend loading with a safe test
-    pwd_context.hash("test")
-except Exception as e:
-    print(f"Warning: Bcrypt backend initialization issue: {e}")
-    # Fallback: try to set a specific backend
-    try:
-        import bcrypt
-        pwd_context = CryptContext(
-            schemes=["bcrypt"],
-            deprecated="auto",
-            bcrypt__rounds=12,
-        )
-    except ImportError:
-        raise RuntimeError("Bcrypt library not properly installed") from e
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verify a plain password against a hashed password.
+    
+    Args:
+        plain_password: The plain text password to verify
+        hashed_password: The hashed password to check against
+        
+    Returns:
+        bool: True if password matches, False otherwise
+    """
     if not plain_password or not hashed_password:
         return False
         
     # Safety Check: Bcrypt crashes if input > 72 bytes
     try:
-        # Passlib handles some of this, but strict backends need manual truncation
+        # Passlib handles some of this, but we add extra safety
         encoded = plain_password.encode('utf-8')
         if len(encoded) > 72:
             # Truncate to 72 bytes
@@ -54,7 +62,17 @@ def get_password_hash(password: str) -> str:
     Hash a password using bcrypt.
     
     IMPORTANT: Bcrypt cannot digest > 72 bytes. We truncate to stay safe.
-    This maintains security while preventing 500 server crashes.
+    This maintains security while preventing server crashes.
+    
+    Args:
+        password: The plain text password to hash
+        
+    Returns:
+        str: The hashed password
+        
+    Raises:
+        ValueError: If password is empty
+        RuntimeError: If hashing fails
     """
     if not password:
         raise ValueError("Password cannot be empty")
@@ -72,6 +90,16 @@ def get_password_hash(password: str) -> str:
 
 
 def create_jwt_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a JWT token with the given data.
+    
+    Args:
+        data: Dictionary of claims to encode in the token
+        expires_delta: Optional custom expiration time
+        
+    Returns:
+        str: The encoded JWT token
+    """
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -84,6 +112,15 @@ def create_jwt_token(data: dict, expires_delta: Optional[timedelta] = None) -> s
 
 
 def verify_jwt_token(token: str) -> dict:
+    """
+    Verify and decode a JWT token.
+    
+    Args:
+        token: The JWT token to verify
+        
+    Returns:
+        dict: The decoded token payload, or None if invalid
+    """
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
