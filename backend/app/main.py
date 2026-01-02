@@ -17,6 +17,7 @@ logger = logging.getLogger("cv_api")
 async def lifespan(app: FastAPI):
     # Create DB Tables on startup if missing
     Base.metadata.create_all(bind=engine)
+    init_db.sync_templates(db)
     yield
 
 app = FastAPI(title="AI CV Builder", lifespan=lifespan)
