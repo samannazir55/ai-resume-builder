@@ -10,6 +10,6 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: ADMIN_EMAIL
-        value: your-admin@email.com
+        value: samannazir55@email.com
       - key: PORT
         value: 8000
