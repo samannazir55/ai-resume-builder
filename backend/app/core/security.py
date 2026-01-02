@@ -50,3 +50,5 @@ def verify_jwt_token(token: str) -> dict:
         return payload
     except JWTError:
         return None
+
+# Deployment Trigger Update: 1767356701.6331584
