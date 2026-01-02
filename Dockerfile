@@ -1,4 +1,3 @@
-
 # ========================================
 # STAGE 1: Build Frontend
 # ========================================
@@ -21,21 +20,25 @@ RUN npm run build
 # ========================================
 # STAGE 2: Setup Backend & Runtime
 # ========================================
-FROM python:3.10-slim
+FROM python:3.11-slim-bookworm
 
 # Prevent python from creating .pyc files
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Install System Dependencies for WeasyPrint (PDF)
-# Using a proven stable list for Debian
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Clean apt cache first, then install with retry logic
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get update -o Acquire::Retries=3 && \
+    apt-get install -y --no-install-recommends --fix-missing -o Acquire::Retries=3 \
     libcairo2 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libgdk-pixbuf2.0-0 \
     libffi-dev \
     shared-mime-info \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
