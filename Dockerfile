@@ -26,17 +26,24 @@ FROM python:3.11-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install System Dependencies for WeasyPrint (PDF)
+# Install System Dependencies
+# CRITICAL: build-essential is required for bcrypt compilation
 # Clean apt cache first, then install with retry logic
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get update -o Acquire::Retries=3 && \
     apt-get install -y --no-install-recommends --fix-missing -o Acquire::Retries=3 \
+    # Build tools for bcrypt
+    gcc \
+    g++ \
+    make \
+    libffi-dev \
+    libssl-dev \
+    # WeasyPrint dependencies for PDF generation
     libcairo2 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libgdk-pixbuf2.0-0 \
-    libffi-dev \
     shared-mime-info \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -44,8 +51,11 @@ RUN apt-get clean && \
 WORKDIR /app
 
 # Install Python Deps
+# Install bcrypt separately first to ensure proper compilation
 COPY backend/requirements.txt ./backend/requirements.txt
-RUN pip install --no-cache-dir -r backend/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir bcrypt>=4.0.0 && \
+    pip install --no-cache-dir -r backend/requirements.txt
 
 # Copy Backend Code
 COPY backend ./backend
