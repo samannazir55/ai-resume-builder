@@ -1,58 +1,53 @@
 import os
 
-# We are correcting the apt-get install line.
-# Removing 'libpande' and adding standard 'libcairo2' & 'libgdk-pixbuf'.
+# We switch the FROM line to a pre-built image that has Python + Node.
+# We also simplify the library installation list to just the PDF essentials.
 
-clean_dockerfile = """
-FROM python:3.10-slim
+foolproof_dockerfile = """
+# 1. Use a pre-built image with Python 3.10 AND Node 20
+# This prevents all the "curl/apt-get" errors for installing Node
+FROM nikolaik/python-nodejs:python3.10-nodejs20
 
-# Prevent python buffering
 ENV PYTHONUNBUFFERED=1
 
-# 1. INSTALL SYSTEM DEPENDENCIES
-# We install Node 20 and specific libraries for WeasyPrint (PDF)
-RUN apt-get update && apt-get install -y \\
-    build-essential \\
-    curl \\
-    gnupg \\
+# 2. Install ONLY the PDF libraries (WeasyPrint)
+# We update the package list first to ensure no 404 errors
+RUN apt-get update && apt-get install -y --no-install-recommends \\
     libcairo2 \\
     libpango-1.0-0 \\
     libpangocairo-1.0-0 \\
     libgdk-pixbuf2.0-0 \\
     libffi-dev \\
     shared-mime-info \\
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \\
-    && apt-get install -y nodejs \\
     && rm -rf /var/lib/apt/lists/*
 
-# Check versions
-RUN node --version && npm --version && python --version
-
+# 3. Setup Application
 WORKDIR /app
 
-# 2. INSTALL PYTHON PACKAGES
+# 4. Install Python Backend Dependencies
 COPY backend/requirements.txt ./
+# We use --timeout to prevent network disconnects during build
 RUN pip install --no-cache-dir -r requirements.txt --timeout 100
 
-# 3. COPY SOURCE CODE
+# 5. Copy Code
 COPY . .
 
-# 4. BUILD FRONTEND
+# 6. Build React Frontend
 WORKDIR /app/frontend
 ENV CI=false
 RUN npm install
 RUN npm run build
 
-# 5. RUN SERVER
+# 7. Final Config
 WORKDIR /app
 CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 """
 
 try:
     with open("Dockerfile", "w", encoding="utf-8") as f:
-        f.write(clean_dockerfile)
-    print("✅ Dockerfile Repair Complete.")
-    print("   - Removed typo 'libpande'.")
-    print("   - Added correct 'libcairo2' & 'libgdk' for PDFs.")
+        f.write(foolproof_dockerfile)
+    print("✅ Dockerfile Swapped.")
+    print("   - Base Image: nikolaik/python-nodejs:python3.10-nodejs20")
+    print("   - Eliminated complex install commands.")
 except Exception as e:
     print(f"❌ Error: {e}")
