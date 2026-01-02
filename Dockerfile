@@ -1,44 +1,38 @@
-# Use a pre-built image with Python 3.10 AND Node 20
+
+# 1. BASE IMAGE: Comes with Python 3.10 + Node 20 pre-installed.
 FROM nikolaik/python-nodejs:python3.10-nodejs20
 
 ENV PYTHONUNBUFFERED=1
-ENV DEBIAN_FRONTEND=noninteractive
 
-# Install PDF libraries (WeasyPrint dependencies)
-# Fixed: Use sh instead of bash for Render compatibility
-SHELL ["/bin/sh", "-c"]
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# 2. INSTALL ONLY PDF TOOLS (WeasyPrint needs these)
+# We don't need to install curl/node/python, they are already there!
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
-    libgdk-pixbuf2.0-0 \
-    libffi-dev \
-    shared-mime-info && \
-    rm -rf /var/lib/apt/lists/*
+    libgdk-pixbuf2.0-0     libffi-dev \
+    shared-mime-info     && rm -rf /var/lib/apt/lists/*
 
-# Setup working directory
+# 3. SETUP BACKEND DEPENDENCIES
 WORKDIR /app
+# We create the folder structure carefully to match your imports
+COPY backend/requirements.txt ./backend/requirements.txt
+RUN pip install --no-cache-dir -r backend/requirements.txt
 
-# Install Python dependencies
-COPY backend/requirements.txt ./backend/
-RUN pip install --no-cache-dir --timeout 100 -r backend/requirements.txt
+# 4. COPY APP CODE
+COPY backend ./backend
+COPY frontend ./frontend
+COPY app ./app 2>/dev/null || : 
+# (The line above helps if 'app' folder exists in root, but harmless if not)
 
-# Copy entire project
-COPY . .
-
-# Build React frontend
+# 5. BUILD FRONTEND
 WORKDIR /app/frontend
+# CI=false prevents halting on minor React warnings
 ENV CI=false
-RUN npm ci --only=production && \
-    npm run build && \
-    npm cache clean --force
+RUN npm install
+RUN npm run build
 
-# Return to app root
+# 6. RUN THE APP
 WORKDIR /app
-
-# Expose port (Render uses PORT env variable)
-EXPOSE 8000
-
-# Start command
+# Uses the Shell Command to find the app correctly
 CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
