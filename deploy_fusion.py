@@ -1,71 +1,58 @@
 import os
 
-# We are upgrading the Dockerfile to:
-# 1. Curl the latest Node.js v20 (instead of default v12).
-# 2. Add 'libpq-dev' (prevents Database installation errors).
-# 3. Increase timeout settings for pip.
+# We are correcting the apt-get install line.
+# Removing 'libpande' and adding standard 'libcairo2' & 'libgdk-pixbuf'.
 
-robust_dockerfile = """
-# 1. Use Python 3.10 (Stable Linux base)
+clean_dockerfile = """
 FROM python:3.10-slim
 
-# 2. Prevent Python from buffering stdout/stderr (See logs instantly)
+# Prevent python buffering
 ENV PYTHONUNBUFFERED=1
 
-# 3. Install System Dependencies & MODERN NODEJS
-# (We chain commands to keep image size small)
+# 1. INSTALL SYSTEM DEPENDENCIES
+# We install Node 20 and specific libraries for WeasyPrint (PDF)
 RUN apt-get update && apt-get install -y \\
     build-essential \\
     curl \\
     gnupg \\
+    libcairo2 \\
     libpango-1.0-0 \\
-    libpangoft2-1.0-0 \\
-    libjpeg62-turbo-dev \
-    zlib1g-dev \\
-    libfreetype6-dev \\
-    libffi-dev \
-    libharfbuzz0b \\
-    libpande-0.5-0 \\
-    xfonts-75dpi \\
-    xfonts-base \\
-    libpq-dev \\
+    libpangocairo-1.0-0 \\
+    libgdk-pixbuf2.0-0 \\
+    libffi-dev \\
+    shared-mime-info \\
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \\
     && apt-get install -y nodejs \\
     && rm -rf /var/lib/apt/lists/*
 
-# Verify versions in logs
-RUN python --version && node --version && npm --version
+# Check versions
+RUN node --version && npm --version && python --version
 
-# 4. Set work directory
 WORKDIR /app
 
-# 5. Backend Dependencies (Cached Layer)
-# Copy just the requirement file first so Docker caches the pip install
+# 2. INSTALL PYTHON PACKAGES
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt --timeout 100
 
-# 6. Copy Project Code
+# 3. COPY SOURCE CODE
 COPY . .
 
-# 7. Frontend Build
+# 4. BUILD FRONTEND
 WORKDIR /app/frontend
-# CI=false prevents the build from failing on minor warnings like "unused variables"
 ENV CI=false
 RUN npm install
 RUN npm run build
 
-# 8. Return to Root
+# 5. RUN SERVER
 WORKDIR /app
-
-# 9. Start Server
-# Uses standard PORT env var from Render (default 10000, but we default to 8000)
 CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 """
 
 try:
     with open("Dockerfile", "w", encoding="utf-8") as f:
-        f.write(robust_dockerfile)
-    print("✅ Dockerfile Upgraded: Now installing Node.js v20 + Anti-Warning settings.")
-    print("   This should fix the 'Exit Status 1' build error.")
+        f.write(clean_dockerfile)
+    print("✅ Dockerfile Repair Complete.")
+    print("   - Removed typo 'libpande'.")
+    print("   - Added correct 'libcairo2' & 'libgdk' for PDFs.")
 except Exception as e:
     print(f"❌ Error: {e}")
