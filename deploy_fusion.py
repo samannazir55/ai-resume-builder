@@ -1,56 +1,34 @@
 import os
 
-# We are patching backend/app/database.py to replace 'postgres://' with 'postgresql://'
-db_file = os.path.join("backend", "app", "database.py")
-
-new_db_code = """
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from .core.config import settings
-
-# --- DATABASE URL PATCHER ---
-# Render/Neon give "postgres://", but SQLAlchemy requires "postgresql://"
-connection_string = settings.DATABASE_URL
-
-if connection_string and connection_string.startswith("postgres://"):
-    connection_string = connection_string.replace("postgres://", "postgresql://", 1)
-
-# Ensure no surrounding quotes (User error protection)
-if connection_string:
-    connection_string = connection_string.strip('"').strip("'")
-
-# Create Engine
-# Note: connect_args={'check_same_thread': False} is only for SQLite.
-# We need to detect if we are using SQLite or Postgres to apply correct args.
-
-connect_args = {}
-if "sqlite" in connection_string:
-    connect_args = {"check_same_thread": False}
-
-engine = create_engine(
-    connection_string, 
-    connect_args=connect_args,
-    pool_pre_ping=True # Helps keep connection alive
-)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
-
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-"""
+main_path = os.path.join("backend", "app", "main.py")
 
 try:
-    with open(db_file, "w", encoding="utf-8") as f:
-        f.write(new_db_code)
-    print("✅ Database Logic Fixed.")
-    print("   - Auto-corrects 'postgres://' to 'postgresql://'")
-    print("   - Strips accidental quote marks.")
+    with open(main_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # The missing line
+    import_line = "from .crud import init_db"
+
+    # 1. Check if missing
+    if "init_db.sync_templates" in content and "from .crud import init_db" not in content:
+        # We need to add the import. 
+        # Find the crud import line or just add it at top imports.
+        if "from .crud import" in content:
+            # We assume a structure like 'from .crud import user as user_crud...'
+            # Let's just insert it cleanly as a separate line after logging import
+            content = content.replace("import logging", "import logging\nfrom .crud import init_db")
+        else:
+            # Fallback
+            content = "from .crud import init_db\n" + content
+            
+        with open(main_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        print("✅ FIXED: Added missing 'init_db' import.")
+        
+    elif "init_db" not in content:
+        print("⚠️ Warning: logic to call init_db is missing too.")
+    else:
+        print("ℹ️ Import seems present already (or checked logic matches).")
+
 except Exception as e:
     print(f"❌ Error: {e}")
