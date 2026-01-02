@@ -1,35 +1,102 @@
 import os
 
-init_db_path = os.path.join("backend", "app", "crud", "init_db.py")
+# REWRITING MAIN.PY TO FIX VARIABLE ORDER ERROR
+# We move the DB logic into a safe sequence in 'lifespan'.
 
-# Correct logic with the adjusted import path
-init_db_corrected = """
-from sqlalchemy.orm import Session
-from ..models import template as models
-# CORRECTION: The seed file is in 'core', not 'crud'. 
-# We use '..' to go up to 'app', then down into 'core'.
-from ..core.seed_data import PERMANENT_TEMPLATES
+main_code = """from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from contextlib import asynccontextmanager
+import os
+import logging
 
-def sync_templates(db: Session):
-    print("🔄 Checking for missing templates...")
-    for data in PERMANENT_TEMPLATES:
-        existing = db.query(models.Template).filter(models.Template.id == data["id"]).first()
-        if not existing:
-            print(f"➕ Auto-Adding missing template: {data['name']}")
-            new_t = models.Template(**data)
-            db.add(new_t)
-        else:
-            # Always update content on restart to ensure fixes apply
-            existing.html_content = data["html"]
-            existing.css_styles = data["css"]
+# Logic Imports
+from .database import engine, Base, SessionLocal
+# We import init_db specifically to sync templates
+from .crud import init_db 
+# Import the API router logic
+from . import main_api 
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("cv_api")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- STARTUP LOGIC ---
+    logger.info("🚀 Server Starting...")
+    
+    # 1. Initialize Database Tables
+    Base.metadata.create_all(bind=engine)
+    
+    # 2. Create DB Session
+    db = SessionLocal()
+    
+    try:
+        # 3. SYNC IMMORTAL TEMPLATES
+        # This inserts the Hardcoded Templates into Postgres
+        init_db.sync_templates(db)
+        logger.info("✅ Templates Synced.")
+    except Exception as e:
+        logger.error(f"❌ Template Sync Failed: {e}")
+    finally:
+        # 4. Close DB Session
+        db.close()
+        
+    logger.info("✅ Startup Complete.")
+    yield
+    # --- SHUTDOWN LOGIC ---
+    logger.info("🛑 Server Shutting Down.")
+
+app = FastAPI(title="AI CV Builder", lifespan=lifespan)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ------------------------------------------------------------------
+# ROUTER SETUP: Include the API router with prefix '/api'
+# ------------------------------------------------------------------
+app.include_router(main_api.router, prefix="/api")
+
+# ------------------------------------------------------------------
+# STATIC FILES (FRONTEND) - ROOT HANDLERS
+# ------------------------------------------------------------------
+frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+
+if os.path.exists(frontend_dist):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_react_app(request: Request, full_path: str):
+        if full_path.startswith("api") or full_path.startswith("docs"):
+            return await request.app.router.handle_request(request)
             
-    db.commit()
-    print("✅ Template Database Synced.")
+        file_path = os.path.join(frontend_dist, full_path)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
+else:
+    @app.get("/")
+    def root(): return {"status": "Backend Running (No Frontend Build Found)"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 """
 
+main_path = os.path.join("backend", "app", "main.py")
+
 try:
-    with open(init_db_path, "w", encoding="utf-8") as f:
-        f.write(init_db_corrected)
-    print("✅ FIXED: init_db.py now looks in the correct folder ('..core') for seed data.")
+    with open(main_path, "w", encoding="utf-8") as f:
+        f.write(main_code)
+    print("✅ Main.py Repaired: 'lifespan' logic re-ordered.")
+    print("   The NameError 'db' is definitely fixed now.")
 except Exception as e:
     print(f"❌ Error: {e}")
