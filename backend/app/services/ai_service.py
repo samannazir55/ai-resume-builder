@@ -1,23 +1,20 @@
 import os
 from dotenv import load_dotenv
-import sys
 from pathlib import Path
 
 # FORCE LOAD .env (Check Root and Backend folders)
 env_path = Path(__file__).resolve().parent.parent.parent / '.env'
 load_dotenv(env_path)
-load_dotenv() # Backup check in current dir
+load_dotenv()  # Backup check in current dir
 
 import json
 import re
-import gc
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 from openai import OpenAI
 from ..schemas import ai as ai_schemas
-from ..core.config import settings
 
-# GLOBAL VARS (Local Mode) - No longer needed but kept for reference
-MODEL_ID = "microsoft/Phi-3-mini-4k-instruct"
+# No longer using local models - removed transformers imports
+MODEL_ID = "microsoft/Phi-3-mini-4k-instruct"  # Kept for reference only
 model = None
 tokenizer = None
 
@@ -50,11 +47,13 @@ def extract_personal_info_regex(cv_text: str) -> dict:
     
     # 1. Email
     email_match = re.search(r'[\w.+-]+@[\w-]+\.[\w.-]+', cv_text)
-    if email_match: info["email"] = email_match.group(0)
+    if email_match: 
+        info["email"] = email_match.group(0)
     
     # 2. Phone
     phone_match = re.search(r'[\+\(]?[1-9][0-9 .\-\(\)]{8,}[0-9]', cv_text)
-    if phone_match: info["phone"] = phone_match.group(0).strip()
+    if phone_match: 
+        info["phone"] = phone_match.group(0).strip()
     
     # 3. Name Heuristics (Look at first 5 lines, avoid 'Curriculum Vitae' etc)
     lines = [l for l in cv_text.split('\n') if l.strip()]
@@ -129,7 +128,8 @@ def generate_cv_content_from_ai(request: ai_schemas.AIGenerationRequest) -> ai_s
     print(f"Processing CV Generation Request...")
     try:
         client = get_client()
-        if not client: raise ValueError("No API Key")
+        if not client: 
+            raise ValueError("No API Key")
 
         model_name = "llama-3.3-70b-versatile" if os.getenv("GROQ_API_KEY") else "gpt-4o-mini"
         
@@ -141,7 +141,7 @@ def generate_cv_content_from_ai(request: ai_schemas.AIGenerationRequest) -> ai_s
         if request.personal_strengths and "SUMMARIZE THIS RESUME:" in request.personal_strengths:
             is_upload_mode = True
             full_text = request.personal_strengths.replace("SUMMARIZE THIS RESUME:", "")
-            raw_text = clean_pdf_text(full_text)[:4000] # Increased limit for Cloud
+            raw_text = clean_pdf_text(full_text)[:4000]  # Increased limit for Cloud
             
             # RUN REGEX NOW
             extracted_regex = extract_personal_info_regex(raw_text)
@@ -228,7 +228,8 @@ def generate_cv_content_from_ai(request: ai_schemas.AIGenerationRequest) -> ai_s
 
 def generate_full_cv_package(req):
     res = generate_cv_content_from_ai(req)
-    if not res.success: return None
+    if not res.success: 
+        return None
     return res.data
 
 def generate_cv_content(req): 
