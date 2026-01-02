@@ -1,7 +1,20 @@
 import axios from 'axios';
 
-// Force point to the API namespace we set up
-const API_URL = 'http://localhost:8000/api';
+// --- DYNAMIC URL HANDLING ---
+// If we are on localhost, point to port 8000
+// If we are on the Cloud (Render), use the relative path '/api' 
+// (because Backend serves Frontend from the same domain)
+
+const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:8000/api';
+    }
+    // For Production (Render), we just use relative path
+    return '/api';
+};
+
+const API_URL = getBaseUrl();
+console.log("🌍 Connecting API to:", API_URL);
 
 const api = axios.create({
     baseURL: API_URL,
@@ -10,7 +23,7 @@ const api = axios.create({
     },
 });
 
-// Attach Token
+// Attach Token if exists
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -21,10 +34,9 @@ api.interceptors.request.use((config) => {
     return Promise.reject(error);
 });
 
-// --- EXPORTED HELPERS ---
+// --- HELPER FUNCTIONS ---
 
 export const login = async (email, password) => {
-    // Send object to backend
     const response = await api.post('/auth/login', { email, password });
     if (response.data.access_token) {
         localStorage.setItem('token', response.data.access_token);
@@ -33,7 +45,7 @@ export const login = async (email, password) => {
 };
 
 export const register = async (payload) => {
-    // Expects payload = { full_name, email, password }
+    // payload: { full_name, email, password }
     const response = await api.post('/auth/register', payload);
     if (response.data.access_token) {
         localStorage.setItem('token', response.data.access_token);
@@ -66,5 +78,4 @@ export const deleteCV = async (id) => {
     return true;
 };
 
-// Export default for direct Axios usage (upload etc)
 export default api;

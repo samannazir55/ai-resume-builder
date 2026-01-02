@@ -1,77 +1,99 @@
 import os
 
-# MULTI-STAGE DOCKERFILE
-# Stage 1: Build Frontend (Node.js Container)
-# Stage 2: Run Backend (Python Container)
+# We modify frontend/src/services/api.js
+# We make the API_URL dynamic.
 
-multistage_docker = """
-# ========================================
-# STAGE 1: Build Frontend
-# ========================================
-FROM node:18-alpine AS frontend-builder
+api_js_path = "frontend/src/services/api.js"
 
-WORKDIR /app/frontend
+new_api_js = """import axios from 'axios';
 
-# Install deps
-COPY frontend/package*.json ./
-# Use --legacy-peer-deps to ignore version conflicts
-RUN npm install --legacy-peer-deps
+// --- DYNAMIC URL HANDLING ---
+// If we are on localhost, point to port 8000
+// If we are on the Cloud (Render), use the relative path '/api' 
+// (because Backend serves Frontend from the same domain)
 
-# Copy code and build
-COPY frontend ./
-# Disable type checks for production build to prevent failure on minor warnings
-ENV TSC_COMPILE_ON_ERROR=true
-ENV ESLINT_NO_DEV_ERRORS=true
-RUN npm run build
+const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:8000/api';
+    }
+    // For Production (Render), we just use relative path
+    return '/api';
+};
 
-# ========================================
-# STAGE 2: Setup Backend & Runtime
-# ========================================
-FROM python:3.10-slim
+const API_URL = getBaseUrl();
+console.log("🌍 Connecting API to:", API_URL);
 
-# Prevent python from creating .pyc files
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+const api = axios.create({
+    baseURL: API_URL,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
 
-# Install System Dependencies for WeasyPrint (PDF)
-# Using a proven stable list for Debian
-RUN apt-get update && apt-get install -y --no-install-recommends \\
-    libcairo2 \\
-    libpango-1.0-0 \\
-    libpangocairo-1.0-0 \\
-    libgdk-pixbuf2.0-0 \\
-    libffi-dev \\
-    shared-mime-info \\
-    && rm -rf /var/lib/apt/lists/*
+// Attach Token if exists
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
 
-WORKDIR /app
+// --- HELPER FUNCTIONS ---
 
-# Install Python Deps
-COPY backend/requirements.txt ./backend/requirements.txt
-RUN pip install --no-cache-dir -r backend/requirements.txt
+export const login = async (email, password) => {
+    const response = await api.post('/auth/login', { email, password });
+    if (response.data.access_token) {
+        localStorage.setItem('token', response.data.access_token);
+    }
+    return response.data;
+};
 
-# Copy Backend Code
-COPY backend ./backend
+export const register = async (payload) => {
+    // payload: { full_name, email, password }
+    const response = await api.post('/auth/register', payload);
+    if (response.data.access_token) {
+        localStorage.setItem('token', response.data.access_token);
+    }
+    return response.data;
+};
 
-# Copy Built Frontend Assets from Stage 1
-# This effectively 'Fuses' the two without needing Node installed here
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+export const getProfile = async () => {
+    const response = await api.get('/auth/profile');
+    return response.data;
+};
 
-# Expose Port
-ENV PORT=8000
-EXPOSE 8000
+export const getTemplates = async () => {
+    const response = await api.get('/templates');
+    return response.data;
+};
 
-# Start Server (Pointing to backend.app.main because we are in /app root)
-# The backend checks '../frontend/dist' relative to itself, 
-# Since WORKDIR is /app, 'frontend/dist' is at /app/frontend/dist.
-CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT}"]
+export const createCV = async (cvData) => {
+    const response = await api.post('/cvs', cvData);
+    return response.data;
+};
+
+export const getCVs = async () => {
+    const response = await api.get('/cvs');
+    return response.data;
+};
+
+export const deleteCV = async (id) => {
+    await api.delete(`/cvs/${id}`);
+    return true;
+};
+
+export default api;
 """
 
 try:
-    with open("Dockerfile", "w", encoding="utf-8") as f:
-        f.write(multistage_docker)
-    print("✅ Dockerfile Switched to Multi-Stage.")
-    print("   - No more Node.js install errors in Python container.")
-    print("   - PDF libraries are isolated.")
+    with open(api_js_path, "w", encoding="utf-8") as f:
+        f.write(new_api_js)
+    print("✅ Frontend API URL Fixed!")
+    print("   - Localhost -> http://localhost:8000/api")
+    print("   - Render Cloud -> /api (Automatic)")
+    
 except Exception as e:
     print(f"❌ Error: {e}")
