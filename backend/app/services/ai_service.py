@@ -8,7 +8,6 @@ env_path = Path(__file__).resolve().parent.parent.parent / '.env'
 load_dotenv(env_path)
 load_dotenv() # Backup check in current dir
 
-import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TextStreamer
 import json
 import re
