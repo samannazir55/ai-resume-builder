@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 // Component Imports
+import TemplateStore from './components/TemplateStore';
 import App from './App.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import RegisterPage from './components/RegisterPage.jsx';
@@ -46,7 +47,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               {/* PRIVATE */}
               <Route path="/" element={<ProtectedRoute><ChatGeneratorPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-              <Route path="/editor" element={<ProtectedRoute><App /></ProtectedRoute>} />
+              <Route path="/store" element={<ProtectedRoute><TemplateStore /></ProtectedRoute>} />
+<Route path="/editor" element={<ProtectedRoute><App /></ProtectedRoute>} />
               <Route path="/admin/new" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>

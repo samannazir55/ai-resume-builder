@@ -1,45 +1,36 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import './TemplateSelector.css';
 
-const TemplateSelector = ({ templates, activeTemplateId, setActiveTemplateId, userIsPremium, onUpgradeRequest }) => {
-
-  const handleSelect = (template) => {
-    // FREEMIUM LOGIC
-    if (template.is_premium && !userIsPremium) {
-        if (onUpgradeRequest) onUpgradeRequest(); else alert("Upgrade required!");
-        // We do NOT change the active template
-        return;
-    }
-    setActiveTemplateId(template.id);
-  };
+const TemplateSelector = ({ templates, activeTemplateId, setActiveTemplateId, userIsPremium }) => {
+  const navigate = useNavigate();
+  // Filter for the carousel: Free OR already active premium ones (if user unlocked them)
+  // For simplicty: Just free + specific Button
+  const freeTemplates = templates.filter(t => !t.is_premium);
 
   return (
     <div className="template-selector-container">
-      <h3>Choose a Style</h3>
       <div className="template-grid">
-        {templates.map((template) => (
+        {freeTemplates.map((template) => (
           <div
             key={template.id}
             className={`template-card ${template.id === activeTemplateId ? 'active' : ''}`}
-            onClick={() => handleSelect(template)}
+            onClick={() => setActiveTemplateId(template.id)}
           >
-            {/* Show Lock if Premium */}
-            {template.is_premium && !userIsPremium && (
-                <div className="premium-badge" title="Premium Template">🔒</div>
-            )}
-            
             <div className="template-preview-image">
               <span>{template.name.charAt(0)}</span>
             </div>
-            <p className="template-name">
-                {template.name}
-                {template.is_premium && <span style={{color:'#e74c3c', fontSize:'10px', display:'block'}}>PREMIUM</span>}
-            </p>
+            <p className="template-name">{template.name}</p>
           </div>
         ))}
+        
+        {/* THE CALL TO ACTION BUTTON */}
+        <div className="template-card special-store-card" onClick={() => navigate('/store')}>
+            <div className="template-preview-image" style={{background: '#333', color:'#FFF'}}>+</div>
+            <p className="template-name">Browse Premium ({templates.filter(t=>t.is_premium).length})</p>
+        </div>
       </div>
     </div>
   );
 };
-
 export default TemplateSelector;
