@@ -4,120 +4,98 @@ import io
 import docx
 import re
 
-# 1. HELPER: Clean pure Hex (Strip hashes, handle nulls)
-def get_clean_hex(value, default="000000"):
-    if not value:
-        return default
-    # Remove #, spaces, and quotes
-    clean = str(value).strip().replace("#", "").replace('"', '').replace("'", "")
-    # Check length
-    if len(clean) not in [3, 6, 8]:
-        return default # Invalid hex, revert to black to prevent crash
-    return clean
-
 def create_pdf_from_template(template_html: str, template_css: str, cv_data: dict) -> bytes:
-    # 2. SANITIZE DATA
-    # We strip hashes from input to avoid double-hash issues later
-    # We guarantee these are safe hex strings "2c3e50"
-    safe_accent = get_clean_hex(cv_data.get("accentColor") or cv_data.get("accent_color"), "2c3e50")
-    safe_text = get_clean_hex(cv_data.get("textColor") or cv_data.get("text_color"), "333333")
+    # 1. SETUP DEFAULTS
+    # We strip hash symbols so we have clean hex strings like "2c3e50"
+    def clean_hex(val, default):
+        if not val: return default
+        s = str(val).strip().replace('#', '').replace('"', '').replace("'", "")
+        return s if len(s) in [3,6] else default
+
+    accent_hex = clean_hex(cv_data.get('accentColor') or cv_data.get('accent_color'), "2c3e50")
+    text_hex = clean_hex(cv_data.get('textColor') or cv_data.get('text_color'), "333333")
     
-    safe_font = cv_data.get("fontFamily") or cv_data.get("font_family") or "sans-serif"
-    # Ensure fonts don't have dangerous characters that break CSS strings
-    safe_font = safe_font.replace('"', '').replace(";", "")
+    font_name = cv_data.get('fontFamily') or cv_data.get('font_family') or "sans-serif"
+    # CSS Font strings usually need quotes if they have spaces "Times New Roman"
+    if " " in font_name and "'" not in font_name and '"' not in font_name:
+        font_name = f"'{font_name}'"
 
-    # 3. BUILD INJECTED CSS
-    # We create a 'shim' CSS block that defines the variables properly with ONE hash
-    css_variables = f"""
-    :root {{
-        --primary: #{safe_accent} !important;
-        --text-color: #{safe_text} !important;
-        --font: '{safe_font}' !important;
-        --accent_color: #{safe_accent} !important; /* legacy support */
-    }}
-    body {{
-        color: #{safe_text} !important;
-        font-family: '{safe_font}', sans-serif !important;
-    }}
-    """
+    # 2. RENDER PYSTACHE FIRST (Fills text variables)
+    # This processes things like {{email}}, but might leave styling alone if hardcoded
+    # We prep data with proper formatting for experience
+    render_data = {**cv_data}
+    render_data['experience'] = (render_data.get('experience') or '').replace('\n', '<br/>')
+    render_data['education'] = (render_data.get('education') or '').replace('\n', '<br/>')
+    
+    html_content = pystache.render(template_html, render_data)
+    css_content = pystache.render(template_css, render_data)
 
-    # 4. PREPARE TEMPLATE DATA
-    # We pass the 'safe' versions too, but also pass the FULL hash version for
-    # templates that might use direct insertion like {{full_accent_code}}
-    render_data = {
-        **cv_data,
-        # Normalized safe values (No hash)
-        "accent_color_clean": safe_accent,
-        "text_color_clean": safe_text,
-        # Standard values (With hash) - FOR USE IN HTML inline styles
-        "accent_color": f"#{safe_accent}",
-        "text_color": f"#{safe_text}",
-        "font_family": safe_font,
-        
-        # HTML Helpers
-        "experience": (cv_data.get("experience") or "").replace("\n", "<br/>"),
-        "education": (cv_data.get("education") or "").replace("\n", "<br/>")
+    # 3. PYTHON CSS COMPILER (Hard Swap Logic)
+    # Instead of asking Weasyprint to understand vars, we do it ourselves.
+    
+    # Mapping table for substitutions
+    replacements = {
+        'var(--primary)': f"#{accent_hex}",
+        'var(--primary, #2c3e50)': f"#{accent_hex}", # Common default fallback
+        'var(--text-color)': f"#{text_hex}",
+        'var(--text)': f"#{text_hex}",
+        'var(--font)': font_name,
+        'var(--font, sans-serif)': font_name
     }
+    
+    for var_key, value in replacements.items():
+        css_content = css_content.replace(var_key, value)
 
-    # 5. RENDER TEMPLATE STRINGS
+    # 4. SAFETY CLEANUP REGEX
+    # Just in case some manual #{{val}} existed
+    # Fix double hashes ##ABC -> #ABC
+    css_content = re.sub(r'#+#', '#', css_content)
+    
+    # Fix empty color declaration like "color: #;" -> "color: #000000;"
+    css_content = re.sub(r':\s*#;', ':#000000;', css_content)
+    
+    # Remove CSS Root definition block entirely to avoid conflicts
+    # Regex to remove :root { ... }
+    css_content = re.sub(r':root\s*\{[^}]*\}', '', css_content)
+
+    # 5. GENERATE PDF
     try:
-        # Prepend our safe variable block to the template's CSS
-        full_css_string = css_variables + "\n" + template_css
+        # Prepend the global rule for body as a safety net
+        header_css = f"body {{ color: #{text_hex} !important; font-family: {font_name} !important; }}"
+        full_css = header_css + "\n" + css_content
         
-        rendered_html = pystache.render(template_html, render_data)
-        rendered_css = pystache.render(full_css_string, render_data)
-        
-        # 6. REGEX POLISH (The Final Safety Net)
-        # Catch accidental ##123456 or # #123456 occurrences
-        rendered_css = re.sub(r'#\s*#', '#', rendered_css)
-        rendered_css = re.sub(r'#+([A-Fa-f0-9]{6})', r'#', rendered_css)
+        doc = HTML(string=html_content)
+        style = CSS(string=full_css)
+        return doc.write_pdf(stylesheets=[style], presentational_hints=True)
         
     except Exception as e:
-        print(f"Template Rendering Error: {e}")
-        # Return an error PDF page instead of crashing server 500
-        error_html = f"<h1>PDF Gen Error</h1><p>{str(e)}</p>"
-        return HTML(string=error_html).write_pdf()
-
-    # 7. GENERATE PDF via WeasyPrint
-    try:
-        html = HTML(string=rendered_html)
-        css = CSS(string=rendered_css)
-        return html.write_pdf(stylesheets=[css], presentational_hints=True)
-    except Exception as e:
-        # Catch internal WeasyPrint parser errors
-        print(f"WeasyPrint Syntax Error: {e}")
-        # Often helpful to print the first few lines of CSS to debug
-        print(f"CSS Context: {rendered_css[:100]}...")
-        raise e
+        print(f"WeasyPrint Failed: {e}")
+        # Send debugging page as PDF so you can read the error instead of crashing
+        err_msg = f"<h1>PDF Error</h1><p>Type: {type(e).__name__}</p><p>{str(e)}</p>"
+        return HTML(string=err_msg).write_pdf()
 
 def create_docx_from_data(cv_data: dict) -> bytes:
     document = docx.Document()
     
-    # Simple Title Header
-    name = cv_data.get('fullName') or cv_data.get('full_name') or "Your Name"
-    document.add_heading(name, 0)
+    # Basic DOCX Generation
+    document.add_heading(cv_data.get('fullName') or cv_data.get('full_name') or 'Candidate', 0)
+    contact = f"{cv_data.get('email','')} | {cv_data.get('phone','')}"
+    document.add_paragraph(contact)
     
-    info = f"{cv_data.get('email', '')} | {cv_data.get('phone', '')} | {cv_data.get('jobTitle') or cv_data.get('job_title', '')}"
-    document.add_paragraph(info)
-    
-    # Iterate standard sections
-    sections = [
-        ("Summary", cv_data.get('summary') or cv_data.get('professional_summary')),
-        ("Experience", cv_data.get('experience') or cv_data.get('experience_points')),
-        ("Education", cv_data.get('education') or cv_data.get('education_formatted')),
-        ("Skills", cv_data.get('skills') or cv_data.get('suggested_skills'))
-    ]
-    
-    for title, content in sections:
+    # Render sections safely
+    sections = ['summary', 'experience', 'education', 'skills']
+    for section in sections:
+        # Check standard camelCase keys or snake_case keys from AI
+        content = cv_data.get(section) or cv_data.get(f'suggested_{section}') or cv_data.get(f'{section}_points')
+        
         if content:
-            document.add_heading(title, 1)
-            # Content cleaning
+            document.add_heading(section.capitalize(), level=1)
             if isinstance(content, list):
-                for item in content: document.add_paragraph(item, style='List Bullet')
+                for item in content: document.add_paragraph(str(item), style='List Bullet')
             else:
-                clean = str(content).replace('<br/>', '\n').replace('<ul>', '').replace('</ul>', '')
-                clean = clean.replace('<li>', '• ').replace('</li>', '\n')
-                for line in clean.split('\n'):
+                # Basic string cleanup
+                text = str(content).replace('<br/>','\n').replace('<ul>','').replace('</ul>','').replace('<li>','• ').replace('</li>','\n')
+                for line in text.split('\n'):
                     if line.strip(): document.add_paragraph(line.strip())
 
     file_stream = io.BytesIO()
