@@ -40,6 +40,9 @@ def create_pdf_from_template(template_html: str, template_css: str, cv_data: dic
         "experience": (cv_data.get('experience') or '').replace('\n', '<br/>'),
         "education": (cv_data.get('education') or '').replace('\n', '<br/>')
     }
+    for k, v in render_data.items():
+        if isinstance(v, str):
+            render_data[k] = v.replace("#", "")
 
     print("\n📝 BEFORE RENDERING:")
     print(f"Template CSS (first 300 chars):\n{template_css[:300]}")
