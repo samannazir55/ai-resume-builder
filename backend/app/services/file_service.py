@@ -75,6 +75,9 @@ def create_pdf_from_template(template_html: str, template_css: str, cv_data: dic
 
     # Generate PDF
     try:
+        print("---- CSS CHAR 60–120 ----")
+        print(compiled_css[60:120])
+
         doc = HTML(string=compiled_html)
         style = CSS(string=compiled_css)
         pdf_bytes = doc.write_pdf(stylesheets=[style], presentational_hints=True)
