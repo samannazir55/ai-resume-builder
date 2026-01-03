@@ -394,38 +394,21 @@ def setup_production_db(db: Session = Depends(get_db)):
             
     db.commit()
     return {"status": "success", "message": f"Setup Complete. {added_count} templates added, others updated."}
-@router.get("/admin/fix_templates")
-def fix_templates(db: Session = Depends(get_db)):
+@router.get("/admin/check_templates")
+def check_templates(db: Session = Depends(get_db)):
     """
-    Loads correct templates from default_templates.py into database
+    Shows what templates are currently in database
     """
-    from crud.default_templates import default_templates_list
     from .models.template import Template
     
-    updated = 0
-    for tmpl_data in default_templates_list:
-        existing = db.query(Template).filter(Template.id == tmpl_data["id"]).first()
-        
-        if existing:
-            # Update with correct templates
-            existing.name = tmpl_data["name"]
-            existing.category = tmpl_data["category"]
-            existing.is_premium = tmpl_data["is_premium"]
-            existing.html_content = tmpl_data["html_content"]
-            existing.css_styles = tmpl_data["css_styles"]
-            updated += 1
-        else:
-            # Create new
-            new_tmpl = Template(
-                id=tmpl_data["id"],
-                name=tmpl_data["name"],
-                category=tmpl_data["category"],
-                is_premium=tmpl_data["is_premium"],
-                html_content=tmpl_data["html_content"],
-                css_styles=tmpl_data["css_styles"]
-            )
-            db.add(new_tmpl)
-            updated += 1
+    templates = db.query(Template).all()
     
-    db.commit()
-    return {"status": "success", "message": f"Fixed {updated} templates in database"}
+    result = []
+    for t in templates:
+        result.append({
+            "id": t.id,
+            "name": t.name,
+            "css_preview": t.css_styles[:200] if t.css_styles else "NO CSS"
+        })
+    
+    return {"templates": result}
