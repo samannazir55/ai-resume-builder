@@ -394,22 +394,40 @@ def setup_production_db(db: Session = Depends(get_db)):
             
     db.commit()
     return {"status": "success", "message": f"Setup Complete. {added_count} templates added, others updated."}
-@router.get("/admin/show_template/{template_id}")
-def show_template_css(template_id: str, db: Session = Depends(get_db)):
+@router.get("/admin/fix_all_templates_complete")
+def fix_all_templates_complete(db: Session = Depends(get_db)):
     """
-    Shows the FULL CSS of a template to debug
+    Completely fixes all color references in templates
     """
     from .models.template import Template
+    import re
     
-    t = db.query(Template).filter(Template.id == template_id).first()
+    templates = db.query(Template).all()
+    fixed = 0
     
-    if not t:
-        return {"error": "Template not found"}
+    for t in templates:
+        if not t.css_styles:
+            continue
+            
+        css = t.css_styles
+        
+        # Fix 1: :root definitions need # before colors
+        css = re.sub(r'--primary:\s*{{accent_color}}', '--primary: #{{accent_color}}', css)
+        css = re.sub(r'--text:\s*{{text_color}}', '--text: #{{text_color}}', css)
+        
+        # Fix 2: Direct color usage in properties
+        css = re.sub(r':\s*{{accent_color}}(?![}])', ': #{{accent_color}}', css)
+        css = re.sub(r':\s*{{text_color}}(?![}])', ': #{{text_color}}', css)
+        
+        # Fix 3: Remove any double hashes created
+        css = re.sub(r'##+{{', '#{{', css)
+        
+        t.css_styles = css
+        fixed += 1
+    
+    db.commit()
     
     return {
-        "id": t.id,
-        "name": t.name,
-        "full_css": t.css_styles,
-        "character_81": t.css_styles[81] if len(t.css_styles) > 81 else "N/A",
-        "chars_70_90": t.css_styles[70:90] if len(t.css_styles) > 90 else "N/A"
+        "status": "success", 
+        "message": f"Fixed {fixed} templates completely"
     }
