@@ -394,21 +394,41 @@ def setup_production_db(db: Session = Depends(get_db)):
             
     db.commit()
     return {"status": "success", "message": f"Setup Complete. {added_count} templates added, others updated."}
-@router.get("/admin/check_templates")
-def check_templates(db: Session = Depends(get_db)):
+@router.get("/admin/fix_all_templates")
+def fix_all_templates(db: Session = Depends(get_db)):
     """
-    Shows what templates are currently in database
+    Fixes all templates by ensuring colors have # in CSS
     """
     from .models.template import Template
+    import re
     
     templates = db.query(Template).all()
+    fixed = 0
     
-    result = []
     for t in templates:
-        result.append({
-            "id": t.id,
-            "name": t.name,
-            "css_preview": t.css_styles[:200] if t.css_styles else "NO CSS"
-        })
+        if not t.css_styles:
+            continue
+            
+        original_css = t.css_styles
+        
+        # Fix: Ensure # before {{accent_color}} and {{text_color}}
+        fixed_css = original_css
+        
+        # Replace: {{accent_color}} → #{{accent_color}}
+        fixed_css = re.sub(r':\s*{{accent_color}}', ': #{{accent_color}}', fixed_css)
+        fixed_css = re.sub(r':\s*{{text_color}}', ': #{{text_color}}', fixed_css)
+        
+        # Also fix any that might have the hash already (prevent double hash)
+        fixed_css = re.sub(r'##+{{', '#{{', fixed_css)
+        
+        if fixed_css != original_css:
+            t.css_styles = fixed_css
+            fixed += 1
     
-    return {"templates": result}
+    db.commit()
+    
+    return {
+        "status": "success", 
+        "message": f"Fixed {fixed} templates",
+        "note": "Colors now have # prefix in CSS"
+    }
