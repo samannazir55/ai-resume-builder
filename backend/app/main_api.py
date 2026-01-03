@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Union
 from sqlalchemy.orm import Session
 import jinja2
 import logging
+import re
 
 # Check for WeasyPrint
 try:
@@ -109,7 +110,6 @@ def render_template_internal(html_content: str, css_content: str, data: Dict[str
             return "333333"
         clean = str(color).replace("#", "")
         # Validate it's actually hex
-        import re
         if re.fullmatch(r"[0-9a-fA-F]{3}|[0-9a-fA-F]{6}", clean):
             # Expand 3-char to 6-char if needed
             if len(clean) == 3:
@@ -137,7 +137,6 @@ def render_template_internal(html_content: str, css_content: str, data: Dict[str
         rendered_css = t_css.render(**mapped_data)
         
         # CLEANUP: Fix any double hashes that might have been created
-        import re
         rendered_css = re.sub(r'##+', '#', rendered_css)
         # Fix orphaned hashes
         rendered_css = re.sub(r':\s*#\s*;', ': #333333;', rendered_css)
@@ -161,6 +160,8 @@ def render_template_internal(html_content: str, css_content: str, data: Dict[str
     except Exception as e:
         logger.error(f"Render Error: {e}")
         return f"<h1>Error generating preview</h1><pre>{e}</pre>"
+
+
 # ---------------------------------------------------------
 # AUTH ENDPOINTS
 # ---------------------------------------------------------
@@ -286,14 +287,9 @@ def export_endpoint(cv_id: int, type: str, db: Session = Depends(get_db), user: 
 
     # 4. Generate Output
     if type == 'pdf':
-        full_html = render_template_internal(tmpl.html_content, tmpl.css_styles, cv_dict)
-        if WEASYPRINT_AVAILABLE:
-            pdf_bytes = HTML(string=full_html).write_pdf()
-            return Response(content=pdf_bytes, media_type="application/pdf")
-        else:
-            # Fallback to HTML if server lacks WeasyPrint (prevent 500 Error)
-            logger.warning("WeasyPrint missing, returning HTML")
-            return Response(content=full_html, media_type="text/html")
+        # Use file_service for PDF generation (it uses pystache)
+        pdf_bytes = file_service.create_pdf_from_template(tmpl.html_content, tmpl.css_styles, cv_dict)
+        return Response(content=pdf_bytes, media_type="application/pdf")
             
     elif type == 'html':
         full_html = render_template_internal(tmpl.html_content, tmpl.css_styles, cv_dict)
@@ -363,48 +359,43 @@ def admin_create(t: template_schemas.TemplateCreate, db: Session = Depends(get_d
         return template_crud.update_template(db, exist, update_data)
     
     return template_crud.create_template(db, t)
+
 # ==========================================
-# ⚡ PRODUCTION SETUP ROUTE
-# Visit /api/setup_production to seed the DB
+# ⚡ PRODUCTION SETUP ROUTE - FIXED VERSION
+# This now imports from seed_data.py
 # ==========================================
 @router.get("/setup_production")
 def setup_production_db(db: Session = Depends(get_db)):
+    """
+    UPDATED: Imports templates from seed_data.py and syncs to Neon database.
+    Call this after deploying new template fixes.
+    """
     from .models.template import Template
+    from .core.seed_data import PERMANENT_TEMPLATES
     
-    # 1. DEFINE TEMPLATES
-    templates_data = [
-        {
-            "id": "modern", "name": "Modern Blue", "category": "professional", "is_premium": False,
-            "html": "<div class='resume-modern'><div class='sidebar'><div class='profile-container'>{{#profile_image}}<img src='{{profile_image}}' class='profile-img'/>{{/profile_image}}<h1>{{full_name}}</h1><p class='job-title'>{{job_title}}</p></div><div class='contact-box'><div class='label'>Contact</div><div class='value'>{{email}}</div><div class='value'>{{phone}}</div></div><div class='skills-box'><div class='label'>Skills</div><ul>{{#skills}}<li>{{.}}</li>{{/skills}}</ul></div></div><div class='main-content'><div class='section'><h2>Profile</h2><div class='text'>{{{summary}}}</div></div><div class='section'><h2>Experience</h2><div class='text history-list'>{{{experience}}}</div></div><div class='section'><h2>Education</h2><div class='text history-list'>{{{education}}}</div></div></div></div>",
-            "css": ".resume-modern{display:flex;font-family:sans-serif;height:100%;min-height:1000px;background:white;color:#333}.sidebar{width:35%;background:var(--primary, #2c3e50);color:white;padding:30px 20px;text-align:center}.main-content{width:65%;padding:30px}.profile-img{width:120px;height:120px;border-radius:50%;border:4px solid rgba(255,255,255,0.2);object-fit:cover;margin-bottom:10px}h1{font-size:22px;margin:10px 0 5px 0;text-transform:uppercase}.job-title{font-size:14px;opacity:0.9;margin-bottom:30px}.label{font-weight:bold;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:5px;margin:20px 0 10px 0;font-size:12px}.skills-box li{background:rgba(0,0,0,0.2);margin-bottom:5px;padding:5px;border-radius:3px;font-size:12px}h2{color:var(--primary, #2c3e50);border-bottom:2px solid var(--primary, #2c3e50);padding-bottom:5px;text-transform:uppercase;margin-top:0}.text{font-size:14px;line-height:1.6;margin-bottom:20px}"
-        },
-        {
-            "id": "classic", "name": "Classic Clean", "category": "simple", "is_premium": False,
-            "html": "<div class='resume-classic'><div class='header'><h1>{{full_name}}</h1><p>{{job_title}}</p><p class='contact'>{{email}} | {{phone}}</p></div><hr/><h3>Professional Summary</h3><p class='summary'>{{{summary}}}</p><h3>Core Competencies</h3><div class='skills-grid'>{{#skills}}<span class='skill-item'>{{.}}</span>{{/skills}}</div><h3>Professional Experience</h3><div class='content'>{{{experience}}}</div><h3>Education</h3><div class='content'>{{{education}}}</div></div>",
-            "css": ".resume-classic{font-family:'Times New Roman',serif;padding:40px;background:white;color:#000;min-height:1000px}.header{text-align:center;margin-bottom:20px}h1{margin:0;font-size:28px;text-transform:uppercase;letter-spacing:2px}.header p{margin:5px 0;font-style:italic}h3{background:#f0f0f0;padding:5px 10px;text-transform:uppercase;font-size:14px;font-weight:bold;border-left:5px solid #333;margin-top:20px}.skills-grid{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}.skill-item{border:1px solid #333;padding:3px 8px;font-size:13px}ul{padding-left:20px}"
-        },
-        {
-            "id": "startup_bold", "name": "Startup Bold", "category": "creative", "is_premium": True,
-            "html": "<div class='resume-start'><div class='start-sidebar'><h1>{{full_name}}</h1><h3>{{job_title}}</h3>{{#profile_image}}<div class='start-img-container'><img src='{{profile_image}}'/></div>{{/profile_image}}<div class='start-group'><div class='start-label'>Contact</div><div>{{email}}</div><div>{{phone}}</div></div><div class='start-group'><div class='start-label'>Skills</div><div class='tag-cloud'>{{#skills}}<span class='tag'>{{.}}</span>{{/skills}}</div></div></div><div class='start-body'><h2 class='shadow-head'>Manifesto</h2><div class='content'>{{{summary}}}</div><h2 class='shadow-head'>Experience</h2><div class='content'>{{{experience}}}</div><h2 class='shadow-head'>Education</h2><div class='content'>{{{education}}}</div></div></div>",
-            "css": ".resume-start{display:flex;font-family:sans-serif;min-height:1000px;background:#fff}.start-sidebar{width:35%;background:#111;color:white;padding:40px 20px;text-align:center}.start-body{width:65%;padding:40px}h1{font-size:32px;margin:0 0 10px 0;line-height:1.1}h3{font-size:16px;font-weight:300;opacity:0.8;color:var(--primary);text-transform:uppercase;letter-spacing:1px}.start-img-container img{width:150px!important;height:150px!important;border-radius:50%;border:4px solid var(--primary);object-fit:cover;margin:0 auto 30px auto;display:block}.start-label{font-size:11px;text-transform:uppercase;color:#888;border-bottom:1px solid #333;margin-bottom:5px}.tag{display:inline-block;background:#333;padding:4px 8px;border-radius:4px;margin:2px;font-size:11px}.shadow-head{font-size:24px;color:#333;text-transform:uppercase;font-weight:800;border-left:5px solid var(--primary);padding-left:15px;margin:0 0 20px 0}"
-        }
-    ]
-
-    added_count = 0
-    for data in templates_data:
-        existing = db.query(Template).filter(Template.id == data["id"]).first()
-        if not existing:
-            new_t = Template(**data)
-            db.add(new_t)
-            added_count += 1
-        else:
-            # Force Update Style/Content in case it's broken
-            existing.html_content = data["html"]
-            existing.css_styles = data["css"]
-            existing.is_premium = data["is_premium"]
-            
+    # 1. Delete ALL existing templates (nuclear option)
+    deleted_count = db.query(Template).delete()
     db.commit()
-    return {"status": "success", "message": f"Setup Complete. {added_count} templates added, others updated."}
+    logger.info(f"🗑️  Deleted {deleted_count} old templates from Neon")
+    
+    # 2. Add fresh templates from seed_data.py
+    added_count = 0
+    for data in PERMANENT_TEMPLATES:
+        logger.info(f"➕ Adding template: {data['name']}")
+        new_t = Template(**data)
+        db.add(new_t)
+        added_count += 1
+    
+    db.commit()
+    logger.info(f"✅ Added {added_count} fresh templates to Neon")
+    
+    return {
+        "status": "success",
+        "deleted": deleted_count,
+        "added": added_count,
+        "message": f"Neon DB Updated: Deleted {deleted_count} old templates, added {added_count} new ones from seed_data.py"
+    }
+
 @router.get("/admin/show_template/{template_id}")
 def show_template_css(template_id: str, db: Session = Depends(get_db)):
     """
@@ -421,9 +412,12 @@ def show_template_css(template_id: str, db: Session = Depends(get_db)):
         "id": t.id,
         "name": t.name,
         "full_css": t.css_styles,
+        "has_mustache_vars": "{{accent_color}}" in t.css_styles,
+        "has_hash_prefix": "#{{accent_color}}" in t.css_styles,
         "character_81": t.css_styles[81] if len(t.css_styles) > 81 else "N/A",
         "chars_70_90": t.css_styles[70:90] if len(t.css_styles) > 90 else "N/A"
     }
+
 @router.get("/admin/debug_render/{template_id}")
 def debug_render(template_id: str, db: Session = Depends(get_db)):
     """
@@ -436,7 +430,7 @@ def debug_render(template_id: str, db: Session = Depends(get_db)):
     if not t:
         return {"error": "Template not found"}
     
-    # Sample data
+    # Sample data (colors WITHOUT # - templates add it)
     test_data = {
         "accent_color": "2c3e50",
         "text_color": "333333",
@@ -454,47 +448,4 @@ def debug_render(template_id: str, db: Session = Depends(get_db)):
         "rendered_css": rendered_css[:500],
         "char_81": rendered_css[81] if len(rendered_css) > 81 else "N/A",
         "chars_70_90": rendered_css[70:90] if len(rendered_css) > 90 else "N/A"
-    }
-@router.get("/admin/nuclear_fix_templates")
-def nuclear_fix_templates(db: Session = Depends(get_db)):
-    """
-    Nuclear option: Directly replace the CSS strings in database
-    """
-    from .models.template import Template
-    
-    templates = db.query(Template).all()
-    fixed = 0
-    
-    for t in templates:
-        if not t.css_styles:
-            continue
-        
-        css = t.css_styles
-        
-        # Direct string replacements (not regex)
-        css = css.replace("--primary: {{accent_color}}", "--primary: #{{accent_color}}")
-        css = css.replace("--text: {{text_color}}", "--text: #{{text_color}}")
-        css = css.replace("--primary:{{accent_color}}", "--primary:#{{accent_color}}")
-        css = css.replace("--text:{{text_color}}", "--text:#{{text_color}}")
-        
-        # Fix any remaining direct usage
-        css = css.replace("color:{{accent_color}}", "color:#{{accent_color}}")
-        css = css.replace("color:{{text_color}}", "color:#{{text_color}}")
-        css = css.replace("background:{{accent_color}}", "background:#{{accent_color}}")
-        css = css.replace("border:{{accent_color}}", "border:#{{accent_color}}")
-        
-        # Remove double hashes
-        css = css.replace("##{{", "#{{")
-        
-        t.css_styles = css
-        fixed += 1
-        
-        print(f"Fixed {t.id}: {css[:100]}")
-    
-    db.commit()
-    
-    return {
-        "status": "success",
-        "message": f"Nuclear fixed {fixed} templates",
-        "note": "Check logs for preview"
     }
