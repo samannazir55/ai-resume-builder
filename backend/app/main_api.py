@@ -444,3 +444,46 @@ def debug_render(template_id: str, db: Session = Depends(get_db)):
         "char_81": rendered_css[81] if len(rendered_css) > 81 else "N/A",
         "chars_70_90": rendered_css[70:90] if len(rendered_css) > 90 else "N/A"
     }
+@router.get("/admin/nuclear_fix_templates")
+def nuclear_fix_templates(db: Session = Depends(get_db)):
+    """
+    Nuclear option: Directly replace the CSS strings in database
+    """
+    from .models.template import Template
+    
+    templates = db.query(Template).all()
+    fixed = 0
+    
+    for t in templates:
+        if not t.css_styles:
+            continue
+        
+        css = t.css_styles
+        
+        # Direct string replacements (not regex)
+        css = css.replace("--primary: {{accent_color}}", "--primary: #{{accent_color}}")
+        css = css.replace("--text: {{text_color}}", "--text: #{{text_color}}")
+        css = css.replace("--primary:{{accent_color}}", "--primary:#{{accent_color}}")
+        css = css.replace("--text:{{text_color}}", "--text:#{{text_color}}")
+        
+        # Fix any remaining direct usage
+        css = css.replace("color:{{accent_color}}", "color:#{{accent_color}}")
+        css = css.replace("color:{{text_color}}", "color:#{{text_color}}")
+        css = css.replace("background:{{accent_color}}", "background:#{{accent_color}}")
+        css = css.replace("border:{{accent_color}}", "border:#{{accent_color}}")
+        
+        # Remove double hashes
+        css = css.replace("##{{", "#{{")
+        
+        t.css_styles = css
+        fixed += 1
+        
+        print(f"Fixed {t.id}: {css[:100]}")
+    
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"Nuclear fixed {fixed} templates",
+        "note": "Check logs for preview"
+    }
