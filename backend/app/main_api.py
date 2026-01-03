@@ -100,16 +100,35 @@ def render_template_internal(html_content: str, css_content: str, data: Dict[str
     """
     mapped_data = normalize_cv_dict(data)
     
+    # CRITICAL FIX: Remove hash from colors - template will add it
+    def strip_hash(color):
+        if not color:
+            return "333333"
+        return str(color).replace("#", "")
+    
+    # Ensure colors are WITHOUT hash for templates that use #{{color}}
+    if "accent_color" in mapped_data:
+        mapped_data["accent_color"] = strip_hash(mapped_data["accent_color"])
+    if "text_color" in mapped_data:
+        mapped_data["text_color"] = strip_hash(mapped_data["text_color"])
+    
     env = jinja2.Environment(loader=jinja2.BaseLoader())
-    # Fix Handlebars/Mustache syntax ({{{ }}} -> {{ | safe }})
+    
+    # Convert Mustache syntax to Jinja2
     clean_html = html_content.replace("{{{", "{{").replace("}}}", " | safe }}")
+    clean_css = css_content.replace("{{{", "{{").replace("}}}", " | safe }}")
     
     try:
         t_html = env.from_string(clean_html)
-        t_css = env.from_string(css_content or "")
+        t_css = env.from_string(clean_css or "")
         
         rendered_body = t_html.render(**mapped_data)
         rendered_css = t_css.render(**mapped_data)
+        
+        # CLEANUP: Fix any double hashes that might have been created
+        import re
+        rendered_css = re.sub(r'##+', '#', rendered_css)
+        rendered_css = re.sub(r':\s*#?\s*;', ': #333333;', rendered_css)
         
         return f"""
         <!DOCTYPE html>
