@@ -5,69 +5,116 @@ import docx
 import re
 
 # HELPER: Color Normalizer
-# Ensures every color has exactly one '#' prefix
 def sanitize_color(val):
-    if not val: return "#333333"
-    # Remove all hashes first
+    """Ensures color has exactly one # prefix"""
+    if not val: 
+        return "#333333"
     clean = str(val).replace("#", "").strip()
-    # Add exactly one hash back
+    # Validate hex format
+    if not re.match(r'^[0-9A-Fa-f]{3,6}$', clean):
+        return "#333333"  # Fallback to default
     return f"#{clean}"
 
 def create_pdf_from_template(template_html: str, template_css: str, cv_data: dict) -> bytes:
-    # 1. Prepare Safe Data Variables
+    """Generate PDF from template with proper error handling"""
+    
+    # 1. Prepare Safe Data
     render_data = {
         **cv_data,
-        # Force sanitize colors to avoid ##HEX issues
         "accent_color": sanitize_color(cv_data.get("accent_color") or cv_data.get("accentColor") or "#2c3e50"),
         "text_color": sanitize_color(cv_data.get("text_color") or cv_data.get("textColor") or "#333333"),
-        "font_family": cv_data.get("fontFamily") or cv_data.get("font_family") or "sans-serif"
+        "font_family": cv_data.get("fontFamily") or cv_data.get("font_family") or "Arial, sans-serif",
+        
+        # Ensure basic fields exist
+        "full_name": cv_data.get("fullName") or cv_data.get("full_name") or "Name",
+        "job_title": cv_data.get("jobTitle") or cv_data.get("job_title") or "Job Title",
+        "email": cv_data.get("email") or "",
+        "phone": cv_data.get("phone") or "",
+        "summary": cv_data.get("summary") or "",
+        "experience": cv_data.get("experience") or "",
+        "education": cv_data.get("education") or "",
+        
+        # Handle skills array
+        "skills": cv_data.get("skills") if isinstance(cv_data.get("skills"), list) else []
     }
 
-    # 2. Render Template Strings
-    # Note: If the template itself has a hardcoded hash like "color: #{{val}}", 
-    # and our val has "#", we get double. We will fix this in post-processing.
-    rendered_html = pystache.render(template_html, render_data)
-    rendered_css = pystache.render(template_css, render_data)
-
-    # 3. CRITICAL POST-PROCESSING FIX
-    # We use Regex to turn '##', '###', '####' into a single '#'
-    # This prevents the 'Unexpected char #' error in WeasyPrint
-    rendered_css = re.sub(r'#+', '#', rendered_css)
-
-    # 4. Generate PDF
-    # We use presentational_hints=True to support HTML attributes like 'align'
-    html = HTML(string=rendered_html)
-    css = CSS(string=rendered_css)
-    
-    return html.write_pdf(stylesheets=[css], presentational_hints=True)
+    try:
+        # 2. Render HTML first (this handles {{#skills}} loops)
+        rendered_html = pystache.render(template_html, render_data)
+        
+        # 3. Render CSS separately (NO loops here, only variables)
+        rendered_css = pystache.render(template_css, render_data)
+        
+        # 4. Post-process CSS to fix any double-hash issues
+        rendered_css = re.sub(r'#{2,}', '#', rendered_css)  # Replace ## or more with single #
+        
+        # 5. Validate CSS doesn't contain Mustache syntax
+        if '{{' in rendered_css or '}}' in rendered_css:
+            print("⚠️ WARNING: Unrendered Mustache tags in CSS:", rendered_css[:200])
+            # Remove any remaining Mustache tags
+            rendered_css = re.sub(r'\{\{[^}]+\}\}', '', rendered_css)
+        
+        # 6. Debug log
+        print("✅ CSS first 200 chars:", rendered_css[:200])
+        print("✅ HTML first 200 chars:", rendered_html[:200])
+        
+        # 7. Generate PDF
+        html_obj = HTML(string=rendered_html)
+        css_obj = CSS(string=rendered_css)
+        
+        pdf_bytes = html_obj.write_pdf(stylesheets=[css_obj], presentational_hints=True)
+        
+        print("✅ PDF generated successfully")
+        return pdf_bytes
+        
+    except Exception as e:
+        print(f"❌ PDF Generation Error: {e}")
+        print(f"CSS content: {rendered_css[:500]}")
+        print(f"HTML content: {rendered_html[:500]}")
+        raise Exception(f"PDF generation failed: {str(e)}")
 
 def create_docx_from_data(cv_data: dict) -> bytes:
+    """Generate DOCX from CV data"""
     document = docx.Document()
     
+    # Header
     document.add_heading(cv_data.get('fullName') or cv_data.get('full_name', 'Name'), 0)
     contact = f"{cv_data.get('email', '')} | {cv_data.get('phone', '')}"
     document.add_paragraph(contact)
     
+    # Sections
     for section in ['summary', 'professional_summary', 'experience', 'education']:
         text = cv_data.get(section, "")
         if text:
-            # Title case header (e.g. "Experience")
-            document.add_heading(section.replace('_', ' ').capitalize(), 1)
+            document.add_heading(section.replace('_', ' ').title(), 1)
             
-            # Simple text cleaning
             if isinstance(text, list):
-                # If bullet points array
                 for item in text:
-                    document.add_paragraph(item, style='List Bullet')
+                    document.add_paragraph(str(item), style='List Bullet')
             else:
-                # If HTML string
-                clean_text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<ul>","").replace("</ul>","").replace("<li>", "").replace("</li>", "\n")
-                lines = clean_text.split('\n')
-                for line in lines:
-                    if line.strip():
-                        # Basic heuristics: start with bullet if short
-                        document.add_paragraph(line.strip())
-
+                # Clean HTML
+                clean_text = re.sub(r'<[^>]+>', '', str(text))  # Strip HTML tags
+                clean_text = clean_text.replace('\n', ' ').strip()
+                
+                if clean_text:
+                    # Split into bullet points if contains bullets
+                    if '•' in clean_text:
+                        bullets = [b.strip() for b in clean_text.split('•') if b.strip()]
+                        for bullet in bullets:
+                            document.add_paragraph(bullet, style='List Bullet')
+                    else:
+                        document.add_paragraph(clean_text)
+    
+    # Skills
+    skills = cv_data.get('skills', [])
+    if skills:
+        document.add_heading('Skills', 1)
+        if isinstance(skills, list):
+            document.add_paragraph(', '.join(skills))
+        else:
+            document.add_paragraph(str(skills))
+    
+    # Save to bytes
     file_stream = io.BytesIO()
     document.save(file_stream)
     file_stream.seek(0)
