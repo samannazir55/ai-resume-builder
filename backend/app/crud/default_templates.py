@@ -1,4 +1,5 @@
-# --- START OF FILE default_templates.py ---
+# --- FIXED default_templates.py ---
+# All Mustache color variables now have proper # prefix in CSS
 
 default_templates_list = [
     {
@@ -10,7 +11,6 @@ default_templates_list = [
         <div class="cv-modern">
             <aside class="cv-sidebar">
                 <div class="profile-image-container">
-                    <!-- We use a conditional check or a placeholder class if no image exists -->
                     <div class="profile-placeholder">
                         <div class="placeholder-avatar">
                             <span>{{full_name_initials}}</span>
@@ -70,7 +70,7 @@ default_templates_list = [
         </div>
         """,
         'css_styles': """
-            /* SCOPING: All styles are strictly inside .cv-modern to prevent affecting the UI icons */
+            /* SCOPING: All styles are strictly inside .cv-modern */
             .cv-modern { 
                 font-family: {{font_family}}, 'Inter', sans-serif; 
                 display: flex;
@@ -81,10 +81,9 @@ default_templates_list = [
             }
 
             /* --- LEFT SIDE (SIDEBAR) --- */
-            /* Fixed text color white to ensure contrast against dark accent background */
             .cv-modern .cv-sidebar {
                 width: 300px;
-                background: linear-gradient(135deg, {{accent_color}} 0%, #2c3e50 100%);
+                background: linear-gradient(135deg, #{{accent_color}} 0%, #2c3e50 100%);
                 color: #ffffff !important; 
                 padding: 40px 30px;
                 text-align: center;
@@ -131,16 +130,15 @@ default_templates_list = [
             }
 
             /* --- RIGHT SIDE (MAIN CONTENT) --- */
-            /* This uses the dynamic text_color only */
             .cv-modern .cv-main {
                 flex: 1;
                 padding: 40px;
                 background: white;
-                color: {{text_color}}; 
+                color: #{{text_color}}; 
             }
 
             .cv-modern .cv-section h2 {
-                color: {{accent_color}};
+                color: #{{accent_color}};
                 font-size: 1.5em;
                 margin-bottom: 20px;
                 text-transform: uppercase;
@@ -152,17 +150,15 @@ default_templates_list = [
             .cv-modern .section-content, 
             .cv-modern .experience-list li, 
             .cv-modern .education-list li {
-                color: {{text_color}};
+                color: #{{text_color}};
                 line-height: 1.6;
             }
 
-            /* Fix for bullet points */
             .cv-modern .experience-list ul, 
             .cv-modern .education-list ul {
                 padding-left: 20px;
             }
             
-            /* Responsive */
             @media (max-width: 768px) {
                 .cv-modern { flex-direction: column; }
                 .cv-modern .cv-sidebar { width: 100%; }
@@ -204,13 +200,13 @@ default_templates_list = [
         </div>
         """,
         'css_styles': """
-        .cv-classic { font-family: 'Times New Roman', serif; color: #000; line-height: 1.4; padding: 40px; max-width: 800px; margin: 0 auto; }
-        .cv-classic .cv-header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #000; padding-bottom: 15px; }
-        .cv-classic .cv-header h1 { font-size: 2.2em; margin-bottom: 8px; color: #000; text-transform: uppercase; }
-        .cv-classic .job-title { color: #000; font-style: italic; font-size: 1.2em;}
-        .cv-classic .contact-info { color: #000; margin-top: 5px; }
+        .cv-classic { font-family: {{font_family}}, 'Times New Roman', serif; color: #{{text_color}}; line-height: 1.4; padding: 40px; max-width: 800px; margin: 0 auto; }
+        .cv-classic .cv-header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #{{text_color}}; padding-bottom: 15px; }
+        .cv-classic .cv-header h1 { font-size: 2.2em; margin-bottom: 8px; color: #{{text_color}}; text-transform: uppercase; }
+        .cv-classic .job-title { color: #{{text_color}}; font-style: italic; font-size: 1.2em;}
+        .cv-classic .contact-info { color: #{{text_color}}; margin-top: 5px; }
         .cv-classic .cv-section { margin-bottom: 20px; }
-        .cv-classic .cv-section h2 { font-size: 1.1em; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 5px; color: #000;}
+        .cv-classic .cv-section h2 { font-size: 1.1em; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #{{text_color}}; padding-bottom: 5px; color: #{{text_color}};}
         .cv-classic .cv-section ul { padding-left: 20px; margin: 0; }
         .cv-classic .skills-list { list-style-type: disc; columns: 2; }
         """
@@ -269,12 +265,12 @@ default_templates_list = [
     """,
     "css_styles": """
         .cv-minimalist {
-            font-family: 'Inter', 'Segoe UI', sans-serif;
+            font-family: {{font_family}}, 'Inter', 'Segoe UI', sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 60px 40px;
             background: white;
-            color: {{text_color}};
+            color: #{{text_color}};
             line-height: 1.6;
         }
         
@@ -288,7 +284,7 @@ default_templates_list = [
             font-size: 2.5em;
             font-weight: 300;
             margin: 0 0 5px 0;
-            color: {{text_color}};
+            color: #{{text_color}};
             letter-spacing: -0.5px;
         }
         
@@ -303,14 +299,14 @@ default_templates_list = [
             display: flex;
             align-items: center;
             font-size: 0.95em;
-            color: {{text_color}};
+            color: #{{text_color}};
             opacity: 0.8;
         }
         
         .cv-minimalist .cv-section h2 {
             font-size: 1.1em;
             font-weight: 600;
-            color: {{accent_color}};
+            color: #{{accent_color}};
             margin-bottom: 20px;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -324,11 +320,11 @@ default_templates_list = [
             left: 0;
             width: 30px;
             height: 1px;
-            background: {{accent_color}};
+            background: #{{accent_color}};
         }
         
         .cv-minimalist .section-content {
-            color: {{text_color}};
+            color: #{{text_color}};
         }
         
         .cv-minimalist .skills-grid {
@@ -344,7 +340,7 @@ default_templates_list = [
             border: 1px solid #e2e8f0;
             border-radius: 4px;
             font-size: 0.9em;
-            color: {{text_color}};
+            color: #{{text_color}};
             text-align: center;
         }
     """

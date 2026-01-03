@@ -4,7 +4,8 @@ import io
 import docx
 import re
 
-def ensure_single_hash(color_value, default_hex="#333333"):
+def ensure_single_hash(color_value, default_hex="333333"):
+    """Returns ONLY the hex digits (no hash)"""
     if not color_value: 
         return default_hex
         
@@ -13,96 +14,54 @@ def ensure_single_hash(color_value, default_hex="#333333"):
     if s.startswith("var("): 
         return default_hex
     
-    # Remove ALL hashes first
+    # Remove ALL hashes
     clean = s.replace("#", "")
     
-    # Valid hex check (3 or 6 chars)
+    # Validate hex
     if not re.match(r'^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$', clean):
         return default_hex
         
-    return f"#{clean}"
+    return clean  # Return WITHOUT hash
 
 def create_pdf_from_template(template_html: str, template_css: str, cv_data: dict) -> bytes:
-    # 1. PREPARE VARIABLES (NO HASH PREFIX)
-    accent = ensure_single_hash(cv_data.get('accentColor') or cv_data.get('accent_color'), "#2c3e50")
-    text_col = ensure_single_hash(cv_data.get('textColor') or cv_data.get('text_color'), "#333333")
-    
-    # CRITICAL: Store WITHOUT hash for Mustache templates
-    accent_no_hash = accent.lstrip('#')
-    text_no_hash = text_col.lstrip('#')
+    # Get colors WITHOUT hash (templates will add it)
+    accent = ensure_single_hash(cv_data.get('accentColor') or cv_data.get('accent_color'), "2c3e50")
+    text_col = ensure_single_hash(cv_data.get('textColor') or cv_data.get('text_color'), "333333")
     
     font_name = cv_data.get('fontFamily') or cv_data.get('font_family') or "sans-serif"
     font_name = re.sub(r'[;"\']+', '', font_name)
 
-    # 2. DATA CLEANING FOR TEMPLATE
+    # Prepare data for Mustache
     render_data = {
         **cv_data,
-        # Provide BOTH versions
-        "accent_color": accent_no_hash,  # For Mustache: #{{accent_color}}
-        "accent_color_full": accent,      # For var substitution
-        "text_color": text_no_hash,
-        "text_color_full": text_col,
+        "accent_color": accent,  # No hash - template adds it
+        "text_color": text_col,   # No hash - template adds it
         "font_family": font_name,
         "experience": (cv_data.get('experience') or '').replace('\n', '<br/>'),
         "education": (cv_data.get('education') or '').replace('\n', '<br/>')
     }
 
-    # 3. RENDER TEMPLATE FIRST
+    # Render HTML and CSS
     compiled_html = pystache.render(template_html, render_data)
+    compiled_css = pystache.render(template_css, render_data)
 
-    # 4. FIX ANY DOUBLE HASHES IN HTML (before CSS processing)
-    compiled_html = re.sub(r'##+', '#', compiled_html)
+    # Safety cleanup
+    compiled_css = re.sub(r'##+', '#', compiled_css)  # Fix double hashes
+    compiled_css = re.sub(r':\s*#?\s*;', f': #{text_col};', compiled_css)  # Fix empty values
 
-    # 5. COMPILE CSS VARIABLES
-    compiled_css = template_css
-    
-    var_map = {
-        "var(--primary)": accent,
-        "var(--text-color)": text_col,
-        "var(--text)": text_col,
-        "var(--font)": font_name,
-        "{{accent_color}}": accent_no_hash,  # No hash for Mustache
-        "{{text_color}}": text_no_hash,
-    }
-    
-    for key, val in var_map.items():
-        compiled_css = compiled_css.replace(key, val)
-
-    # 6. AGGRESSIVE CLEANUP
-    # Fix any double hashes
-    compiled_css = re.sub(r'##+', '#', compiled_css)
-    # Fix empty color values
-    compiled_css = re.sub(r':\s*#?\s*;', f': {text_col};', compiled_css)
-    # Fix malformed hex (non-hex chars after #)
-    compiled_css = re.sub(r'#[^0-9a-fA-F\s;}{]', f'#{text_no_hash}', compiled_css)
-
-    # 7. GENERATE PDF with better error handling
+    # Generate PDF
     try:
-        overrides = f"""
-        body, p, li, span, div {{ color: {text_col} !important; font-family: {font_name}, sans-serif !important; }}
-        h1, h2, h3, h4, h5, .header, .title {{ color: {accent} !important; }}
-        """
-        final_css_string = overrides + "\n" + compiled_css
-        
-        # Debug: Print first 500 chars to log
-        print("CSS Preview:", final_css_string[:500])
-        
         doc = HTML(string=compiled_html)
-        style = CSS(string=final_css_string)
-        
+        style = CSS(string=compiled_css)
         return doc.write_pdf(stylesheets=[style], presentational_hints=True)
         
     except Exception as e:
-        print(f"PDF ENGINE ERROR: {e}")
-        print(f"CSS causing error:\n{final_css_string}")
+        print(f"PDF ERROR: {e}")
+        print(f"CSS Preview:\n{compiled_css[:500]}")
         
-        # Fallback with minimal CSS
-        try:
-            doc = HTML(string=compiled_html)
-            return doc.write_pdf()
-        except:
-            err_msg = f"<h1>PDF Generation Failed</h1><p>{str(e)}</p><pre>{compiled_css[:200]}</pre>"
-            return HTML(string=err_msg).write_pdf()
+        # Return error PDF
+        err_msg = f"<h1>PDF Failed</h1><p>{str(e)}</p>"
+        return HTML(string=err_msg).write_pdf()
 
 def create_docx_from_data(cv_data: dict) -> bytes:
     document = docx.Document()
