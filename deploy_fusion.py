@@ -2,105 +2,116 @@ import os
 
 file_service_path = os.path.join("backend", "app", "services", "file_service.py")
 
-robust_pdf_compiler = """import pystache
+# THIS VERSION IS DESIGNED FOR FORENSIC ANALYSIS
+xray_service = """import pystache
 from weasyprint import HTML, CSS
 import io
 import docx
 import re
+import traceback
 
 def create_pdf_from_template(template_html: str, template_css: str, cv_data: dict) -> bytes:
     # 1. SETUP DEFAULTS
-    # We strip hash symbols so we have clean hex strings like "2c3e50"
     def clean_hex(val, default):
         if not val: return default
+        # Remove anything that isn't a hex char
         s = str(val).strip().replace('#', '').replace('"', '').replace("'", "")
         return s if len(s) in [3,6] else default
 
     accent_hex = clean_hex(cv_data.get('accentColor') or cv_data.get('accent_color'), "2c3e50")
     text_hex = clean_hex(cv_data.get('textColor') or cv_data.get('text_color'), "333333")
-    
-    font_name = cv_data.get('fontFamily') or cv_data.get('font_family') or "sans-serif"
-    # CSS Font strings usually need quotes if they have spaces "Times New Roman"
-    if " " in font_name and "'" not in font_name and '"' not in font_name:
-        font_name = f"'{font_name}'"
+    font_name = cv_data.get('fontFamily') or "sans-serif"
 
-    # 2. RENDER PYSTACHE FIRST (Fills text variables)
-    # This processes things like {{email}}, but might leave styling alone if hardcoded
-    # We prep data with proper formatting for experience
+    # 2. RENDER CONTENT
     render_data = {**cv_data}
     render_data['experience'] = (render_data.get('experience') or '').replace('\\n', '<br/>')
     render_data['education'] = (render_data.get('education') or '').replace('\\n', '<br/>')
     
     html_content = pystache.render(template_html, render_data)
-    css_content = pystache.render(template_css, render_data)
-
-    # 3. PYTHON CSS COMPILER (Hard Swap Logic)
-    # Instead of asking Weasyprint to understand vars, we do it ourselves.
     
-    # Mapping table for substitutions
+    # 3. CSS "HARD" COMPILATION
+    # Manually injecting vars to avoid any CSS variable parser issues
+    
+    css_content = template_css
+    
+    # Simple replace logic
     replacements = {
         'var(--primary)': f"#{accent_hex}",
-        'var(--primary, #2c3e50)': f"#{accent_hex}", # Common default fallback
         'var(--text-color)': f"#{text_hex}",
         'var(--text)': f"#{text_hex}",
         'var(--font)': font_name,
-        'var(--font, sans-serif)': font_name
+        # Legacy template compatibility (Handle hardcoded template logic)
+        '{{accent_color}}': accent_hex,
+        '#{{accent_color}}': f"#{accent_hex}"
     }
     
-    for var_key, value in replacements.items():
-        css_content = css_content.replace(var_key, value)
+    for key, val in replacements.items():
+        css_content = css_content.replace(key, val)
 
-    # 4. SAFETY CLEANUP REGEX
-    # Just in case some manual #{{val}} existed
-    # Fix double hashes ##ABC -> #ABC
+    # FINAL CLEANUP REGEX
+    # Fix double hash '##'
     css_content = re.sub(r'#+#', '#', css_content)
-    
-    # Fix empty color declaration like "color: #;" -> "color: #000000;"
+    # Fix empty color declaration like ': #;'
     css_content = re.sub(r':\s*#;', ':#000000;', css_content)
-    
-    # Remove CSS Root definition block entirely to avoid conflicts
-    # Regex to remove :root { ... }
-    css_content = re.sub(r':root\s*\{[^}]*\}', '', css_content)
 
-    # 5. GENERATE PDF
+    # 4. GENERATION ATTEMPT
     try:
-        # Prepend the global rule for body as a safety net
-        header_css = f"body {{ color: #{text_hex} !important; font-family: {font_name} !important; }}"
-        full_css = header_css + "\\n" + css_content
+        # Prepend Reset
+        full_css = f"body {{ font-family: {font_name}; color: #{text_hex}; }}\\n" + css_content
         
         doc = HTML(string=html_content)
         style = CSS(string=full_css)
         return doc.write_pdf(stylesheets=[style], presentational_hints=True)
         
     except Exception as e:
-        print(f"WeasyPrint Failed: {e}")
-        # Send debugging page as PDF so you can read the error instead of crashing
-        err_msg = f"<h1>PDF Error</h1><p>Type: {type(e).__name__}</p><p>{str(e)}</p>"
-        return HTML(string=err_msg).write_pdf()
+        print(f"CRITICAL PDF FAILURE: {e}")
+        
+        # 🚨 X-RAY MODE 🚨
+        # Create a visible debug report inside the PDF so we can read it.
+        
+        debug_html = f\"\"\"
+        <html>
+        <body style="font-family: monospace; padding: 20px; color: #333;">
+            <h1 style="color: red; border-bottom: 2px solid red;">PDF CRASH REPORT</h1>
+            <p><strong>Error:</strong> {str(e)}</p>
+            <p><strong>Location hint:</strong> {traceback.format_exc().splitlines()[-1]}</p>
+            
+            <hr>
+            
+            <h3>🔎 THE OFFENDING CSS CODE:</h3>
+            <pre style="background: #f4f4f4; padding: 10px; border: 1px solid #ccc; white-space: pre-wrap; word-wrap: break-word;">
+            {add_line_numbers(full_css)}
+            </pre>
+        </body>
+        </html>
+        \"\"\"
+        # Fallback PDF generator (Empty CSS to ensure it renders)
+        try:
+            return HTML(string=debug_html).write_pdf()
+        except:
+            return b"Fatal Error generating Debug PDF."
+
+def add_line_numbers(text):
+    lines = text.split('\\n')
+    numbered = []
+    for i, line in enumerate(lines):
+        # Format: "  81 | .sidebar { background: #.... }"
+        numbered.append(f"{i+1:4d} | {line}")
+    return "\\n".join(numbered)
 
 def create_docx_from_data(cv_data: dict) -> bytes:
     document = docx.Document()
+    document.add_heading(cv_data.get('fullName') or 'Candidate', 0)
     
-    # Basic DOCX Generation
-    document.add_heading(cv_data.get('fullName') or cv_data.get('full_name') or 'Candidate', 0)
-    contact = f"{cv_data.get('email','')} | {cv_data.get('phone','')}"
-    document.add_paragraph(contact)
-    
-    # Render sections safely
     sections = ['summary', 'experience', 'education', 'skills']
     for section in sections:
-        # Check standard camelCase keys or snake_case keys from AI
-        content = cv_data.get(section) or cv_data.get(f'suggested_{section}') or cv_data.get(f'{section}_points')
-        
-        if content:
-            document.add_heading(section.capitalize(), level=1)
-            if isinstance(content, list):
-                for item in content: document.add_paragraph(str(item), style='List Bullet')
-            else:
-                # Basic string cleanup
-                text = str(content).replace('<br/>','\\n').replace('<ul>','').replace('</ul>','').replace('<li>','• ').replace('</li>','\\n')
-                for line in text.split('\\n'):
-                    if line.strip(): document.add_paragraph(line.strip())
+        val = cv_data.get(section, "")
+        if val:
+            document.add_heading(section.capitalize(), 1)
+            # Remove html tags
+            clean = str(val).replace("<br/>", "\\n").replace("<ul>","").replace("</ul>","").replace("<li>", "- ")
+            for line in clean.split('\\n'):
+                if line.strip(): document.add_paragraph(line.strip())
 
     file_stream = io.BytesIO()
     document.save(file_stream)
@@ -110,10 +121,8 @@ def create_docx_from_data(cv_data: dict) -> bytes:
 
 try:
     with open(file_service_path, "w", encoding="utf-8") as f:
-        f.write(robust_pdf_compiler)
-    print("✅ FILE SERVICE COMPILED.")
-    print("   - PDF Engine now swaps Variables BEFORE CSS parsing.")
-    print("   - This bypasses Weasyprint var() issues.")
-    print("   - Handles Double Hash automatically.")
+        f.write(xray_service)
+    print("✅ INSTALLED X-RAY DEBUGGER.")
+    print("   If PDF fails now, it will return a document containing the faulty CSS code.")
 except Exception as e:
     print(f"❌ Error: {e}")
