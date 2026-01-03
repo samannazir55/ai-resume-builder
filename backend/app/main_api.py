@@ -96,15 +96,26 @@ def normalize_cv_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def render_template_internal(html_content: str, css_content: str, data: Dict[str, Any]) -> str:
     """
-    Safe Internal Rendering of HTML using Jinja2
+    Safe Internal Rendering of HTML using Jinja2.
+    
+    CRITICAL: This function provides colors WITHOUT # prefix because
+    the templates have #{{accent_color}} syntax built-in.
     """
     mapped_data = normalize_cv_dict(data)
     
-    # CRITICAL FIX: Remove hash from colors - template will add it
+    # CRITICAL FIX: Remove hash from colors - templates add it via #{{color}}
     def strip_hash(color):
         if not color:
             return "333333"
-        return str(color).replace("#", "")
+        clean = str(color).replace("#", "")
+        # Validate it's actually hex
+        import re
+        if re.fullmatch(r"[0-9a-fA-F]{3}|[0-9a-fA-F]{6}", clean):
+            # Expand 3-char to 6-char if needed
+            if len(clean) == 3:
+                clean = ''.join([c*2 for c in clean])
+            return clean
+        return "333333"
     
     # Ensure colors are WITHOUT hash for templates that use #{{color}}
     if "accent_color" in mapped_data:
@@ -128,7 +139,9 @@ def render_template_internal(html_content: str, css_content: str, data: Dict[str
         # CLEANUP: Fix any double hashes that might have been created
         import re
         rendered_css = re.sub(r'##+', '#', rendered_css)
-        rendered_css = re.sub(r':\s*#?\s*;', ': #333333;', rendered_css)
+        # Fix orphaned hashes
+        rendered_css = re.sub(r':\s*#\s*;', ': #333333;', rendered_css)
+        rendered_css = re.sub(r':\s*#\s*\}', ': #333333', rendered_css)
         
         return f"""
         <!DOCTYPE html>
@@ -148,8 +161,6 @@ def render_template_internal(html_content: str, css_content: str, data: Dict[str
     except Exception as e:
         logger.error(f"Render Error: {e}")
         return f"<h1>Error generating preview</h1><pre>{e}</pre>"
-
-
 # ---------------------------------------------------------
 # AUTH ENDPOINTS
 # ---------------------------------------------------------
