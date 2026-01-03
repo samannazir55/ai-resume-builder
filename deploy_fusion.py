@@ -1,102 +1,81 @@
 import os
 
-# REWRITING MAIN.PY TO FIX VARIABLE ORDER ERROR
-# We move the DB logic into a safe sequence in 'lifespan'.
+# REWRITING backend/app/core/seed_data.py with CORRECT database keys
+# "html" -> "html_content"
+# "css"  -> "css_styles"
 
-main_code = """from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from contextlib import asynccontextmanager
-import os
-import logging
+seed_path = os.path.join("backend", "app", "core", "seed_data.py")
 
-# Logic Imports
-from .database import engine, Base, SessionLocal
-# We import init_db specifically to sync templates
-from .crud import init_db 
-# Import the API router logic
-from . import main_api 
+seed_corrected = """
+# IMMORTAL TEMPLATES CONFIG (FIXED KEYS)
+# Matches SQLAlchemy columns: html_content, css_styles
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("cv_api")
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # --- STARTUP LOGIC ---
-    logger.info("🚀 Server Starting...")
-    
-    # 1. Initialize Database Tables
-    Base.metadata.create_all(bind=engine)
-    
-    # 2. Create DB Session
-    db = SessionLocal()
-    
-    try:
-        # 3. SYNC IMMORTAL TEMPLATES
-        # This inserts the Hardcoded Templates into Postgres
-        init_db.sync_templates(db)
-        logger.info("✅ Templates Synced.")
-    except Exception as e:
-        logger.error(f"❌ Template Sync Failed: {e}")
-    finally:
-        # 4. Close DB Session
-        db.close()
-        
-    logger.info("✅ Startup Complete.")
-    yield
-    # --- SHUTDOWN LOGIC ---
-    logger.info("🛑 Server Shutting Down.")
-
-app = FastAPI(title="AI CV Builder", lifespan=lifespan)
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ------------------------------------------------------------------
-# ROUTER SETUP: Include the API router with prefix '/api'
-# ------------------------------------------------------------------
-app.include_router(main_api.router, prefix="/api")
-
-# ------------------------------------------------------------------
-# STATIC FILES (FRONTEND) - ROOT HANDLERS
-# ------------------------------------------------------------------
-frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
-
-if os.path.exists(frontend_dist):
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
-
-    @app.get("/{full_path:path}")
-    async def serve_react_app(request: Request, full_path: str):
-        if full_path.startswith("api") or full_path.startswith("docs"):
-            return await request.app.router.handle_request(request)
-            
-        file_path = os.path.join(frontend_dist, full_path)
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            return FileResponse(file_path)
-        
-        return FileResponse(os.path.join(frontend_dist, "index.html"))
-else:
-    @app.get("/")
-    def root(): return {"status": "Backend Running (No Frontend Build Found)"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+PERMANENT_TEMPLATES = [
+    {
+        "id": "modern",
+        "name": "Modern Blue",
+        "category": "professional",
+        "is_premium": False,
+        "html_content": "<div class='resume-modern'><div class='sidebar'><div class='profile-container'>{{#profile_image}}<img src='{{profile_image}}' class='profile-img'/>{{/profile_image}}<h1>{{full_name}}</h1><p class='job-title'>{{job_title}}</p></div><div class='contact-box'><div class='label'>Contact</div><div class='value'>{{email}}</div><div class='value'>{{phone}}</div></div><div class='skills-box'><div class='label'>Skills</div><ul>{{#skills}}<li>{{.}}</li>{{/skills}}</ul></div></div><div class='main-content'><div class='section'><h2>Profile</h2><div class='text'>{{{summary}}}</div></div><div class='section'><h2>Experience</h2><div class='text history-list'>{{{experience}}}</div></div><div class='section'><h2>Education</h2><div class='text history-list'>{{{education}}}</div></div></div></div>",
+        "css_styles": ".resume-modern{display:flex;font-family:sans-serif;height:100%;min-height:1000px;background:white;color:#333}.sidebar{width:35%;background:var(--primary, #2c3e50);color:white;padding:30px 20px;text-align:center}.main-content{width:65%;padding:30px}.profile-img{width:120px;height:120px;border-radius:50%;border:4px solid rgba(255,255,255,0.2);object-fit:cover;margin-bottom:10px}h1{font-size:22px;margin:10px 0 5px 0;text-transform:uppercase}.job-title{font-size:14px;opacity:0.9;margin-bottom:30px}.label{font-weight:bold;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:5px;margin:20px 0 10px 0;font-size:12px}.skills-box li{background:rgba(0,0,0,0.2);margin-bottom:5px;padding:5px;border-radius:3px;font-size:12px}h2{color:var(--primary, #2c3e50);border-bottom:2px solid var(--primary, #2c3e50);padding-bottom:5px;text-transform:uppercase;margin-top:0}.text{font-size:14px;line-height:1.6;margin-bottom:20px} .history-list p { margin:5px 0; }"
+    },
+    {
+        "id": "classic",
+        "name": "Classic Clean",
+        "category": "simple",
+        "is_premium": False,
+        "html_content": "<div class='resume-classic'><div class='header'><h1>{{full_name}}</h1><p>{{job_title}}</p><p class='contact'>{{email}} | {{phone}}</p></div><hr/><h3>Professional Summary</h3><p class='summary'>{{{summary}}}</p><h3>Skills</h3><div class='skills-grid'>{{#skills}}<span class='skill-item'>{{.}}</span>{{/skills}}</div><h3>Experience</h3><div class='content'>{{{experience}}}</div><h3>Education</h3><div class='content'>{{{education}}}</div></div>",
+        "css_styles": ".resume-classic{font-family:'Times New Roman',serif;padding:40px;background:white;color:#000;min-height:1000px}.header{text-align:center;margin-bottom:20px}h1{margin:0;font-size:28px;text-transform:uppercase;letter-spacing:2px}.header p{margin:5px 0;font-style:italic}h3{background:#f0f0f0;padding:5px 10px;text-transform:uppercase;font-size:14px;font-weight:bold;border-left:5px solid #333;margin-top:20px}.skills-grid{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}.skill-item{border:1px solid #333;padding:3px 8px;font-size:13px}ul{padding-left:20px}"
+    },
+    {
+        "id": "startup_bold",
+        "name": "Startup Bold",
+        "category": "creative",
+        "is_premium": True,
+        "html_content": "<div class='resume-start'><div class='start-sidebar'><h1>{{full_name}}</h1><h3>{{job_title}}</h3>{{#profile_image}}<div class='start-img-container'><img src='{{profile_image}}'/></div>{{/profile_image}}<div class='start-group'><div class='start-label'>Contact</div><div>{{email}}</div><div>{{phone}}</div></div><div class='start-group'><div class='start-label'>Skills</div><div class='tag-cloud'>{{#skills}}<span class='tag'>{{.}}</span>{{/skills}}</div></div></div><div class='start-body'><h2 class='shadow-head'>Manifesto</h2><div class='content'>{{{summary}}}</div><h2 class='shadow-head'>Experience</h2><div class='content'>{{{experience}}}</div><h2 class='shadow-head'>Education</h2><div class='content'>{{{education}}}</div></div></div>",
+        "css_styles": ":root{--primary: {{accent_color}};} .resume-start{display:flex;font-family:sans-serif;min-height:1000px;background:#fff;width:100%;overflow:hidden;}.start-sidebar{width:30%;min-width:250px;background:#111;color:white;padding:40px 20px;text-align:center;box-sizing:border-box}.start-body{width:70%;padding:40px;box-sizing:border-box}h1{font-size:32px;margin:0 0 10px 0;line-height:1.1}h3{font-size:16px;font-weight:300;opacity:0.8;color:var(--primary);text-transform:uppercase;letter-spacing:1px}.start-img-container img{width:150px!important;height:150px!important;border-radius:50%;border:4px solid var(--primary);object-fit:cover;margin:0 auto 30px auto;display:block}.start-label{font-size:11px;text-transform:uppercase;color:#888;border-bottom:1px solid #333;margin-bottom:5px}.tag{display:inline-block;background:#333;padding:4px 8px;border-radius:4px;margin:2px;font-size:11px}.shadow-head{font-size:24px;color:#333;text-transform:uppercase;font-weight:800;border-left:5px solid var(--primary);padding-left:15px;margin:0 0 20px 0}"
+    }
+]
 """
 
-main_path = os.path.join("backend", "app", "main.py")
+# Update CRUD logic to match (init_db.py must read the new keys too)
+# Actually, if we use **data, it will work automatically now that keys match models!
+# We just need to fix the fallback part in init_db.py where we access fields manually
+
+init_db_fixed = """
+from sqlalchemy.orm import Session
+from ..models import template as models
+from ..core.seed_data import PERMANENT_TEMPLATES
+
+def sync_templates(db: Session):
+    print("🔄 Checking for missing templates...")
+    count = 0
+    for data in PERMANENT_TEMPLATES:
+        existing = db.query(models.Template).filter(models.Template.id == data["id"]).first()
+        if not existing:
+            print(f"➕ Auto-Adding: {data['name']}")
+            new_t = models.Template(**data)
+            db.add(new_t)
+            count += 1
+        else:
+            # Force update content using CORRECT keys
+            existing.html_content = data["html_content"]
+            existing.css_styles = data["css_styles"]
+            
+    db.commit()
+    print(f"✅ Synced. Added {count} new templates.")
+"""
 
 try:
-    with open(main_path, "w", encoding="utf-8") as f:
-        f.write(main_code)
-    print("✅ Main.py Repaired: 'lifespan' logic re-ordered.")
-    print("   The NameError 'db' is definitely fixed now.")
+    # 1. Update Data File
+    with open(seed_path, "w", encoding="utf-8") as f:
+        f.write(seed_corrected)
+    
+    # 2. Update Logic File
+    with open("backend/app/crud/init_db.py", "w", encoding="utf-8") as f:
+        f.write(init_db_fixed)
+        
+    print("✅ Seed Keys Fixed (html -> html_content).")
+    print("   Startup should now succeed.")
 except Exception as e:
     print(f"❌ Error: {e}")
