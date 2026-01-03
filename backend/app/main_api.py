@@ -394,40 +394,53 @@ def setup_production_db(db: Session = Depends(get_db)):
             
     db.commit()
     return {"status": "success", "message": f"Setup Complete. {added_count} templates added, others updated."}
-@router.get("/admin/fix_all_templates_complete")
-def fix_all_templates_complete(db: Session = Depends(get_db)):
+@router.get("/admin/show_template/{template_id}")
+def show_template_css(template_id: str, db: Session = Depends(get_db)):
     """
-    Completely fixes all color references in templates
+    Shows the FULL CSS of a template to debug
     """
     from .models.template import Template
-    import re
     
-    templates = db.query(Template).all()
-    fixed = 0
+    t = db.query(Template).filter(Template.id == template_id).first()
     
-    for t in templates:
-        if not t.css_styles:
-            continue
-            
-        css = t.css_styles
-        
-        # Fix 1: :root definitions need # before colors
-        css = re.sub(r'--primary:\s*{{accent_color}}', '--primary: #{{accent_color}}', css)
-        css = re.sub(r'--text:\s*{{text_color}}', '--text: #{{text_color}}', css)
-        
-        # Fix 2: Direct color usage in properties
-        css = re.sub(r':\s*{{accent_color}}(?![}])', ': #{{accent_color}}', css)
-        css = re.sub(r':\s*{{text_color}}(?![}])', ': #{{text_color}}', css)
-        
-        # Fix 3: Remove any double hashes created
-        css = re.sub(r'##+{{', '#{{', css)
-        
-        t.css_styles = css
-        fixed += 1
-    
-    db.commit()
+    if not t:
+        return {"error": "Template not found"}
     
     return {
-        "status": "success", 
-        "message": f"Fixed {fixed} templates completely"
+        "id": t.id,
+        "name": t.name,
+        "full_css": t.css_styles,
+        "character_81": t.css_styles[81] if len(t.css_styles) > 81 else "N/A",
+        "chars_70_90": t.css_styles[70:90] if len(t.css_styles) > 90 else "N/A"
+    }
+@router.get("/admin/debug_render/{template_id}")
+def debug_render(template_id: str, db: Session = Depends(get_db)):
+    """
+    Shows what the CSS looks like AFTER rendering with sample data
+    """
+    from .models.template import Template
+    import jinja2
+    
+    t = db.query(Template).filter(Template.id == template_id).first()
+    if not t:
+        return {"error": "Template not found"}
+    
+    # Sample data
+    test_data = {
+        "accent_color": "2c3e50",
+        "text_color": "333333",
+        "font_family": "sans-serif"
+    }
+    
+    # Render it
+    env = jinja2.Environment(loader=jinja2.BaseLoader())
+    template = env.from_string(t.css_styles)
+    rendered_css = template.render(**test_data)
+    
+    return {
+        "template_id": template_id,
+        "original_css": t.css_styles[:200],
+        "rendered_css": rendered_css[:500],
+        "char_81": rendered_css[81] if len(rendered_css) > 81 else "N/A",
+        "chars_70_90": rendered_css[70:90] if len(rendered_css) > 90 else "N/A"
     }
