@@ -4,138 +4,122 @@ import io
 import docx
 import re
 
-def sanitize_color(val):
-    """Ensures color has exactly one # prefix and is valid hex"""
-    if not val: 
-        return "333333"  # NO HASH - template will add it
-    
-    # Remove ALL hashes
-    clean = str(val).replace("#", "").strip()
-    
-    # Validate hex format
-    if not re.match(r'^[0-9A-Fa-f]{3,6}$', clean):
-        return "333333"  # Fallback, NO HASH
-    
-    return clean  # Return WITHOUT hash
+# 1. HELPER: Clean pure Hex (Strip hashes, handle nulls)
+def get_clean_hex(value, default="000000"):
+    if not value:
+        return default
+    # Remove #, spaces, and quotes
+    clean = str(value).strip().replace("#", "").replace('"', '').replace("'", "")
+    # Check length
+    if len(clean) not in [3, 6, 8]:
+        return default # Invalid hex, revert to black to prevent crash
+    return clean
 
 def create_pdf_from_template(template_html: str, template_css: str, cv_data: dict) -> bytes:
-    """Generate PDF from template - CRITICAL FIX for # issue"""
+    # 2. SANITIZE DATA
+    # We strip hashes from input to avoid double-hash issues later
+    # We guarantee these are safe hex strings "2c3e50"
+    safe_accent = get_clean_hex(cv_data.get("accentColor") or cv_data.get("accent_color"), "2c3e50")
+    safe_text = get_clean_hex(cv_data.get("textColor") or cv_data.get("text_color"), "333333")
     
-    # 1. Prepare data WITHOUT hashes in colors
+    safe_font = cv_data.get("fontFamily") or cv_data.get("font_family") or "sans-serif"
+    # Ensure fonts don't have dangerous characters that break CSS strings
+    safe_font = safe_font.replace('"', '').replace(";", "")
+
+    # 3. BUILD INJECTED CSS
+    # We create a 'shim' CSS block that defines the variables properly with ONE hash
+    css_variables = f"""
+    :root {{
+        --primary: #{safe_accent} !important;
+        --text-color: #{safe_text} !important;
+        --font: '{safe_font}' !important;
+        --accent_color: #{safe_accent} !important; /* legacy support */
+    }}
+    body {{
+        color: #{safe_text} !important;
+        font-family: '{safe_font}', sans-serif !important;
+    }}
+    """
+
+    # 4. PREPARE TEMPLATE DATA
+    # We pass the 'safe' versions too, but also pass the FULL hash version for
+    # templates that might use direct insertion like {{full_accent_code}}
     render_data = {
-        "full_name": cv_data.get("fullName") or cv_data.get("full_name") or "Name",
-        "job_title": cv_data.get("jobTitle") or cv_data.get("job_title") or "Job Title",
-        "email": cv_data.get("email") or "",
-        "phone": cv_data.get("phone") or "",
-        "location": cv_data.get("location") or "",
-        "summary": cv_data.get("summary") or "",
-        "experience": cv_data.get("experience") or "",
-        "education": cv_data.get("education") or "",
-        "skills": cv_data.get("skills") if isinstance(cv_data.get("skills"), list) else [],
+        **cv_data,
+        # Normalized safe values (No hash)
+        "accent_color_clean": safe_accent,
+        "text_color_clean": safe_text,
+        # Standard values (With hash) - FOR USE IN HTML inline styles
+        "accent_color": f"#{safe_accent}",
+        "text_color": f"#{safe_text}",
+        "font_family": safe_font,
         
-        # CRITICAL: Colors WITHOUT hash
-        "accent_color": sanitize_color(cv_data.get("accent_color") or cv_data.get("accentColor") or "#2c3e50"),
-        "text_color": sanitize_color(cv_data.get("text_color") or cv_data.get("textColor") or "#333333"),
-        "font_family": cv_data.get("fontFamily") or cv_data.get("font_family") or "Arial, sans-serif",
+        # HTML Helpers
+        "experience": (cv_data.get("experience") or "").replace("\n", "<br/>"),
+        "education": (cv_data.get("education") or "").replace("\n", "<br/>")
     }
-    
+
+    # 5. RENDER TEMPLATE STRINGS
     try:
-        # 2. First, replace ALL {{color}} with #{{color}} in CSS template
-        # This ensures colors ALWAYS have exactly one hash
-        css_fixed = re.sub(r':\s*\{\{(accent_color|text_color)\}\}', r': #\{\{\1\}\}', template_css)
+        # Prepend our safe variable block to the template's CSS
+        full_css_string = css_variables + "\n" + template_css
         
-        # 3. Now render with Mustache (colors don't have # in data)
         rendered_html = pystache.render(template_html, render_data)
-        rendered_css = pystache.render(css_fixed, render_data)
+        rendered_css = pystache.render(full_css_string, render_data)
         
-        # 4. Final safety check - remove any double/triple hashes
-        rendered_css = re.sub(r'#{2,}', '#', rendered_css)
-        
-        # 5. Remove any unrendered Mustache tags
-        rendered_css = re.sub(r'\{\{[^}]+\}\}', '', rendered_css)
-        
-        # 6. Debug output
-        print("=" * 60)
-        print("🎨 RENDER DATA:")
-        print(f"  accent_color: {render_data['accent_color']}")
-        print(f"  text_color: {render_data['text_color']}")
-        print("\n📄 CSS (first 400 chars):")
-        print(rendered_css[:400])
-        print("=" * 60)
-        
-        # 7. Generate PDF
-        html_obj = HTML(string=rendered_html)
-        css_obj = CSS(string=rendered_css)
-        
-        pdf_bytes = html_obj.write_pdf(stylesheets=[css_obj], presentational_hints=True)
-        
-        print("✅ PDF generated successfully!")
-        return pdf_bytes
+        # 6. REGEX POLISH (The Final Safety Net)
+        # Catch accidental ##123456 or # #123456 occurrences
+        rendered_css = re.sub(r'#\s*#', '#', rendered_css)
+        rendered_css = re.sub(r'#+([A-Fa-f0-9]{6})', r'#', rendered_css)
         
     except Exception as e:
-        print(f"❌ PDF ERROR: {e}")
-        print(f"\n🔍 CSS around error position:")
-        if 'at' in str(e):
-            # Extract position number from error message
-            match = re.search(r'at (\d+)', str(e))
-            if match:
-                pos = int(match.group(1))
-                start = max(0, pos - 50)
-                end = min(len(rendered_css), pos + 50)
-                print(f"Position {pos}: ...{rendered_css[start:end]}...")
-                print(f"Character at {pos}: '{rendered_css[pos] if pos < len(rendered_css) else 'N/A'}'")
-        
-        raise Exception(f"PDF generation failed: {str(e)}")
+        print(f"Template Rendering Error: {e}")
+        # Return an error PDF page instead of crashing server 500
+        error_html = f"<h1>PDF Gen Error</h1><p>{str(e)}</p>"
+        return HTML(string=error_html).write_pdf()
+
+    # 7. GENERATE PDF via WeasyPrint
+    try:
+        html = HTML(string=rendered_html)
+        css = CSS(string=rendered_css)
+        return html.write_pdf(stylesheets=[css], presentational_hints=True)
+    except Exception as e:
+        # Catch internal WeasyPrint parser errors
+        print(f"WeasyPrint Syntax Error: {e}")
+        # Often helpful to print the first few lines of CSS to debug
+        print(f"CSS Context: {rendered_css[:100]}...")
+        raise e
 
 def create_docx_from_data(cv_data: dict) -> bytes:
-    """Generate DOCX from CV data"""
     document = docx.Document()
     
-    # Header
-    document.add_heading(cv_data.get('fullName') or cv_data.get('full_name', 'Name'), 0)
-    contact = f"{cv_data.get('email', '')} | {cv_data.get('phone', '')}"
-    document.add_paragraph(contact)
+    # Simple Title Header
+    name = cv_data.get('fullName') or cv_data.get('full_name') or "Your Name"
+    document.add_heading(name, 0)
     
-    # Sections
+    info = f"{cv_data.get('email', '')} | {cv_data.get('phone', '')} | {cv_data.get('jobTitle') or cv_data.get('job_title', '')}"
+    document.add_paragraph(info)
+    
+    # Iterate standard sections
     sections = [
-        ('summary', 'Summary'),
-        ('professional_summary', 'Professional Summary'),
-        ('experience', 'Experience'),
-        ('education', 'Education')
+        ("Summary", cv_data.get('summary') or cv_data.get('professional_summary')),
+        ("Experience", cv_data.get('experience') or cv_data.get('experience_points')),
+        ("Education", cv_data.get('education') or cv_data.get('education_formatted')),
+        ("Skills", cv_data.get('skills') or cv_data.get('suggested_skills'))
     ]
     
-    for key, title in sections:
-        text = cv_data.get(key, "")
-        if text:
+    for title, content in sections:
+        if content:
             document.add_heading(title, 1)
-            
-            if isinstance(text, list):
-                for item in text:
-                    document.add_paragraph(str(item), style='List Bullet')
+            # Content cleaning
+            if isinstance(content, list):
+                for item in content: document.add_paragraph(item, style='List Bullet')
             else:
-                # Clean HTML
-                clean_text = re.sub(r'<[^>]+>', '', str(text))
-                clean_text = clean_text.replace('&nbsp;', ' ').strip()
-                
-                if clean_text:
-                    # Split by bullets
-                    if '•' in clean_text:
-                        bullets = [b.strip() for b in clean_text.split('•') if b.strip()]
-                        for bullet in bullets:
-                            document.add_paragraph(bullet, style='List Bullet')
-                    else:
-                        document.add_paragraph(clean_text)
-    
-    # Skills
-    skills = cv_data.get('skills', [])
-    if skills:
-        document.add_heading('Skills', 1)
-        if isinstance(skills, list):
-            document.add_paragraph(', '.join(skills))
-        else:
-            document.add_paragraph(str(skills))
-    
-    # Save to bytes
+                clean = str(content).replace('<br/>', '\n').replace('<ul>', '').replace('</ul>', '')
+                clean = clean.replace('<li>', '• ').replace('</li>', '\n')
+                for line in clean.split('\n'):
+                    if line.strip(): document.add_paragraph(line.strip())
+
     file_stream = io.BytesIO()
     document.save(file_stream)
     file_stream.seek(0)
