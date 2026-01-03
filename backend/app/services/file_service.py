@@ -5,23 +5,15 @@ import docx
 import re
 
 def ensure_single_hash(color_value, default_hex="333333"):
-    """Returns ONLY the hex digits (no hash)"""
-    if not color_value: 
+    if not color_value:
         return default_hex
-        
-    s = str(color_value).strip().replace('"', '').replace("'", "")
-    
-    if s.startswith("var("): 
-        return default_hex
-    
-    # Remove ALL hashes
-    clean = s.replace("#", "")
-    
-    # Validate hex
-    if not re.match(r'^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$', clean):
-        return default_hex
-        
-    return clean
+
+    s = str(color_value).strip().lstrip("#")
+
+    if re.fullmatch(r"[0-9a-fA-F]{3}|[0-9a-fA-F]{6}", s):
+        return s
+
+    return default_hex
 
 def create_pdf_from_template(template_html: str, template_css: str, cv_data: dict) -> bytes:
     print("=" * 80)
@@ -68,10 +60,6 @@ def create_pdf_from_template(template_html: str, template_css: str, cv_data: dic
         for i, line in enumerate(compiled_css.split('\n')[:50], 1):
             if '##' in line:
                 print(f"   Line {i}: {line.strip()}")
-
-    # Safety cleanup
-    compiled_css = re.sub(r'##+', '#', compiled_css)
-    compiled_css = re.sub(r':\s*#?\s*;', f': #{text_col};', compiled_css)
 
     print("\n📝 AFTER CLEANUP:")
     print(f"Final CSS (first 500 chars):\n{compiled_css[:500]}")

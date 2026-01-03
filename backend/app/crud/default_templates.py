@@ -83,7 +83,7 @@ default_templates_list = [
             /* --- LEFT SIDE (SIDEBAR) --- */
             .cv-modern .cv-sidebar {
                 width: 300px;
-                background: linear-gradient(135deg, #{{accent_color}} 0%, #2c3e50 100%);
+                background: linear-gradient(135deg, #{{accent_color}} 0%, rgb(44,62,80) 100%);
                 color: #ffffff !important; 
                 padding: 40px 30px;
                 text-align: center;
