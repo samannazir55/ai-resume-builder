@@ -1,135 +1,156 @@
 import os
 
-# We overwrite the PDF generation service.
-# Goal: 100% prevent double hashtags.
+# 1. UPDATE TEMPLATE STORE
+# Goal: When user clicks "Unlock/Select" on a premium template, 
+# CREATE a CV entry in the DB immediately so it exists.
 
-path = os.path.join("backend", "app", "services", "file_service.py")
+store_path = os.path.join("frontend", "src", "components", "TemplateStore.jsx")
 
-new_file_service = """
-import pystache
-from weasyprint import HTML, CSS
-import io
-import docx
-import re
+new_store_code = """import React, { useEffect, useState } from 'react';
+import { getTemplates, createCV } from '../services/api'; // Added createCV
+import { useAuth } from '../context/useAuth'; // Get user details for defaults
+import { useNavigate } from 'react-router-dom';
+import './TemplateStore.css';
 
-# --- HELPER: SAFE COLOR GENERATOR ---
-def ensure_single_hash(color_value, default_hex="#333333"):
-    if not color_value: 
-        return default_hex
+const TemplateStore = () => {
+  const [templates, setTemplates] = useState([]);
+  const [processingId, setProcessingId] = useState(null); // Loading state for buttons
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    getTemplates().then(setTemplates);
+  }, []);
+
+  const handleSelect = async (tmpl) => {
+      // PREVENT DOUBLE CLICK
+      if (processingId) return;
+      
+      const isPaid = tmpl.is_premium;
+      
+      if (isPaid) {
+          // 1. Simulate Payment Flow
+          const confirmed = window.confirm(`💎 Premium Design: '${tmpl.name}'\\n\\nDo you want to unlock and use this template? (Simulated Payment)`);
+          if (!confirmed) return;
+      }
+
+      setProcessingId(tmpl.id);
+
+      try {
+          // 2. AUTO-CREATE THE CV DRAFT
+          // We create it in the database immediately so it appears on the Dashboard
+          const defaultData = {
+              title: `${tmpl.name} CV - ${new Date().toLocaleDateString()}`,
+              template_id: tmpl.id,
+              data: {
+                  fullName: user?.fullName || 'Your Name',
+                  email: user?.email || '',
+                  jobTitle: 'Target Role',
+                  summary: 'Ready to write my new professional summary...',
+                  accentColor: '#2c3e50', // Default nice blue
+                  fontFamily: 'sans-serif'
+              }
+          };
+
+          console.log("creating CV draft for...", tmpl.name);
+          const response = await createCV(defaultData);
+          
+          // 3. REDIRECT TO EDITOR with the new specific ID
+          // We pass existingCV so App.jsx loads from DB immediately
+          navigate('/editor', { state: { existingCV: response } });
+
+      } catch (err) {
+          alert("Error creating CV: " + err.message);
+          setProcessingId(null);
+      }
+  };
+
+  return (
+    <div className="store-container">
+        <header className="store-header">
+            <button className="back-btn" onClick={() => navigate('/editor')}>⬅ Back to Editor</button>
+            <button className="dash-btn" onClick={() => navigate('/dashboard')}>📂 My Dashboard</button>
+            <h1>Template Gallery</h1>
+            <p>Select a design to start a new Resume</p>
+        </header>
+
+        <div className="store-section">
+            <h2 className="section-label">💎 Premium Collection</h2>
+            <div className="store-grid">
+                {templates.filter(t => t.is_premium).map(t => (
+                    <div key={t.id} className="store-card" onClick={() => handleSelect(t)}>
+                        <div className="card-preview premium-bg">
+                            {/* Visual representation */}
+                            <span style={{fontSize:'3rem'}}>✨</span>
+                            <span className="premium-tag">PRO</span>
+                        </div>
+                        <div className="card-info">
+                            <h3>{t.name}</h3>
+                            <p className="category">{t.category}</p>
+                            <button className="buy-btn" disabled={processingId === t.id}>
+                                {processingId === t.id ? "Creating..." : "Select & Use"}
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
         
-    s = str(color_value).strip().replace('"', '').replace("'", "")
-    
-    # If it's already a var, ignore it
-    if s.startswith("var("): return default_hex
-    
-    # Remove ALL hashes first
-    clean = s.replace("#", "")
-    
-    # Valid hex check (3 or 6 chars)
-    if len(clean) not in [3, 6]:
-        return default_hex
-        
-    # Return with EXACTLY one hash
-    return f"#{clean}"
+        <div className="store-section">
+            <h2 className="section-label">🌱 Free Essentials</h2>
+            <div className="store-grid small">
+                {templates.filter(t => !t.is_premium).map(t => (
+                    <div key={t.id} className="store-card free" onClick={() => handleSelect(t)}>
+                        <div className="card-preview free-bg">
+                            <span style={{fontSize:'3rem'}}>📄</span>
+                        </div>
+                        <div className="card-info">
+                            <h3>{t.name}</h3>
+                            <button className="buy-btn free-btn" disabled={processingId === t.id}>
+                                {processingId === t.id ? "Loading..." : "Use Free"}
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+  );
+};
+export default TemplateStore;
+"""
 
-def create_pdf_from_template(template_html: str, template_css: str, cv_data: dict) -> bytes:
-    # 1. PREPARE VARIABLES
-    # React usually sends 'accentColor', 'textColor'. 
-    # AI or older code sends 'accent_color'.
-    
-    accent = ensure_single_hash(cv_data.get('accentColor') or cv_data.get('accent_color'), "#2c3e50")
-    text_col = ensure_single_hash(cv_data.get('textColor') or cv_data.get('text_color'), "#333333")
-    
-    font_name = cv_data.get('fontFamily') or cv_data.get('font_family') or "sans-serif"
-    # sanitize font string
-    font_name = font_name.replace(";", "").replace('"', '').replace("'", "")
+# 2. UPDATE CSS (For new buttons and layout)
+store_css_append = """
+.back-btn { 
+    position: absolute; left: 30px; top: 30px; 
+    background: transparent; border: 1px solid #ccc; padding: 8px 15px; borderRadius: 6px; cursor: pointer; color: #555; font-weight: bold;
+}
+.dash-btn { 
+    position: absolute; right: 30px; top: 30px; 
+    background: #2c3e50; color: white; padding: 8px 15px; borderRadius: 6px; cursor: pointer; font-weight: bold; border: none;
+}
+.store-header { position: relative; padding-top: 20px; }
+.section-label { color: #64748b; font-size: 14px; text-transform: uppercase; margin: 30px 0 15px 0; border-bottom: 2px solid #e2e8f0; display: inline-block; }
 
-    # 2. DATA CLEANING FOR TEMPLATE (Pystache)
-    render_data = {
-        **cv_data,
-        "accent_color": accent,
-        "text_color": text_col,
-        "font_family": font_name,
-        # Helper for HTML line breaks
-        "experience": (cv_data.get('experience') or '').replace('\\n', '<br/>'),
-        "education": (cv_data.get('education') or '').replace('\\n', '<br/>')
-    }
+/* Gradients for previews */
+.premium-bg { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: #fbbf24; }
+.free-bg { background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); color: #64748b; }
 
-    # 3. COMPILE CSS VARIABLES (Hard Substitution)
-    # This removes the need for Weasyprint to resolve var() which often fails on syntax
-    
-    compiled_css = template_css
-    
-    # Explicit mapping
-    var_map = {
-        "var(--primary)": accent,
-        "var(--text-color)": text_col,
-        "var(--text)": text_col,
-        "var(--font)": font_name,
-        "{{accent_color}}": accent,  # catch handlebars
-        "#{{accent_color}}": accent, # catch accidental hash before handlebar
-    }
-    
-    for key, val in var_map.items():
-        # Case insensitive replacement for safety could be better but str.replace is faster
-        compiled_css = compiled_css.replace(key, val)
-
-    # 4. FINAL REGEX CLEANUP (The Safety Net)
-    # Fix any '##' created by edge cases
-    compiled_css = re.sub(r'#+#', '#', compiled_css)
-    # Fix 'color: ;' or 'color: #;'
-    compiled_css = re.sub(r':\s*#?;', f':{text_col};', compiled_css)
-
-    # 5. RENDER CONTENT
-    compiled_html = pystache.render(template_html, render_data)
-
-    # 6. GENERATE PDF
-    try:
-        # We append a Force Override header to ensure user preferences beat template defaults
-        overrides = f\"\"\"
-        body, p, li, span, div {{ color: {text_col} !important; font-family: {font_name} !important; }}
-        h1, h2, h3, h4, h5, .header, .title {{ color: {accent} !important; }}
-        \"\"\"
-        final_css_string = overrides + "\\n" + compiled_css
-        
-        doc = HTML(string=compiled_html)
-        style = CSS(string=final_css_string)
-        
-        return doc.write_pdf(stylesheets=[style], presentational_hints=True)
-        
-    except Exception as e:
-        print(f"PDF ENGINE ERROR: {e}")
-        # Create a Debug PDF so user knows what happened instead of 500 error
-        err_msg = f"<h1>PDF Gen Failed</h1><p>{str(e)}</p>"
-        return HTML(string=err_msg).write_pdf()
-
-def create_docx_from_data(cv_data: dict) -> bytes:
-    # DOCX Generator (Standard)
-    document = docx.Document()
-    document.add_heading(cv_data.get('fullName', 'Candidate'), 0)
-    document.add_paragraph(f"{cv_data.get('email','')} | {cv_data.get('phone','')}")
-    
-    sections = ['summary', 'experience', 'education', 'skills']
-    for sec in sections:
-        val = cv_data.get(sec, "")
-        if val:
-            document.add_heading(sec.capitalize(), 1)
-            # Basic HTML stripping
-            clean = str(val).replace("<br/>", "\\n").replace("<ul>","").replace("</ul>","").replace("<li>", "• ").replace("</li>", "\\n")
-            for line in clean.split('\\n'):
-                if line.strip(): document.add_paragraph(line.strip())
-
-    file_stream = io.BytesIO()
-    document.save(file_stream)
-    file_stream.seek(0)
-    return file_stream.read()
+.free-btn { background: #64748b !important; }
 """
 
 try:
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(new_file_service)
-    print("✅ FILE SERVICE OVERWRITTEN.")
-    print("   - Includes `ensure_single_hash` helper.")
-    print("   - Logic checks for existing # before adding one.")
+    with open(store_path, "w", encoding="utf-8") as f:
+        f.write(new_store_code)
+    
+    with open("frontend/src/components/TemplateStore.css", "a", encoding="utf-8") as f:
+        f.write(store_css_append)
+        
+    print("✅ STORE LOGIC UPDATED.")
+    print("   - Clicking any template (Free or Pro) now creates a DB Draft.")
+    print("   - Draft immediately syncs to Dashboard.")
+    print("   - Redirects to Editor ready to work.")
+
 except Exception as e:
     print(f"❌ Error: {e}")
