@@ -173,3 +173,14 @@
     box-shadow: 0 4px 15px rgba(0,0,0,0.3); /* The paper shadow */
     min-height: 800px; /* Ensure page format */
 }
+
+.back-dash-btn {
+    position: absolute; left: 0; 
+    padding: 8px 16px; background: rgba(255,255,255,0.2); 
+    border: 1px solid rgba(255,255,255,0.4); 
+    color: white; border-radius: 6px; 
+    cursor: pointer; font-weight: 500; font-size: 0.9rem;
+    display: flex; align-items: center; gap: 5px;
+    transition: 0.2s;
+}
+.back-dash-btn:hover { background: rgba(255,255,255,0.3); }

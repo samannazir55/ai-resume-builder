@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react'; // Added useRef
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/useAuth';
-import { getTemplates, createCV } from './services/api';
+import api, { getTemplates, createCV } from './services/api';
 import './App.css';
 import CVForm from './components/CVForm';
 import CVPreview from './components/CVPreview';
@@ -13,156 +13,134 @@ function App() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   
+  // STATE
   const [cvData, setCvData] = useState({
       fullName: '', email: '', phone: '', jobTitle: '', summary: '',
       experience: '', education: '', skills: '',
-      accentColor: '#2c3e50', textColor: '#333333', fontFamily: 'sans-serif'
+      accentColor: '#2c3e50', textColor: '#333333', fontFamily: 'Helvetica, Arial, sans-serif'
   });
   
-  const [templates, setTemplates] = useState([]);
+  const [templates, setTemplates] = useState([]); 
   const [activeTemplateId, setActiveTemplateId] = useState('modern');
   const [cvId, setCvId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Use a Ref to track if we have force-loaded an ID to prevent overrides
+  const hasLoadedInitialId = useRef(false);
 
+  // 1. DATA LOAD ENGINE
   useEffect(() => {
       let incoming = null;
-      let originalRequest = null;
-      
       try {
           const s = sessionStorage.getItem('aiResult');
           if (s && s !== 'undefined') incoming = JSON.parse(s);
-      } catch (e) { 
-          console.error("Storage error", e);
-          sessionStorage.removeItem('aiResult'); 
-      }
+      } catch (e) { sessionStorage.removeItem('aiResult'); }
 
-      if (!incoming && location.state) {
-          incoming = location.state.generatedContent;
-          originalRequest = location.state.originalRequest;
-      }
-      
+      if (!incoming) incoming = location.state?.generatedContent;
       if (!incoming) incoming = location.state?.existingCV;
+      
+      // Check for forced template via store navigation
+      if (location.state?.forceTemplate) {
+          console.log("💎 Forced Template via Store:", location.state.forceTemplate);
+          setActiveTemplateId(location.state.forceTemplate);
+          hasLoadedInitialId.current = true;
+      }
 
       const aiData = (incoming && incoming.data) ? incoming.data : incoming;
 
       if (aiData) {
-          console.log("📥 Editor Loading Data:", aiData);
-          
+          console.log("📥 Editor Loading:", aiData);
+          const processExp = (val) => Array.isArray(val) ? val.map(p => `• ${p}`).join('\n') : (val || '');
+          const processSkill = (val) => Array.isArray(val) ? val.join(', ') : (val || '');
+
           setCvData(prev => ({
               ...prev,
-              // CRITICAL FIX: Use originalRequest for name/email if available
-              fullName: aiData.full_name || originalRequest?.full_name || user?.fullName || prev.fullName,
-              email: aiData.email || originalRequest?.email || user?.email || prev.email,
+              fullName: aiData.full_name || user?.fullName || prev.fullName,
+              email: aiData.email || user?.email || prev.email,
               phone: aiData.phone || prev.phone,
-              jobTitle: aiData.desired_job_title || originalRequest?.desired_job_title || prev.jobTitle,
+              jobTitle: aiData.desired_job_title || prev.jobTitle,
               summary: aiData.professional_summary || prev.summary,
               education: aiData.education_formatted || prev.education,
-              experience: Array.isArray(aiData.experience_points) 
-                ? '• ' + aiData.experience_points.join('\n• ') 
-                : (aiData.experience || ''),
-              skills: Array.isArray(aiData.suggested_skills) 
-                ? aiData.suggested_skills.join(', ') 
-                : (aiData.skills || '')
+              experience: processExp(aiData.experience_points || aiData.experience),
+              skills: processSkill(aiData.suggested_skills || aiData.skills),
+              accentColor: aiData.accentColor || prev.accentColor,
+              textColor: aiData.textColor || prev.textColor,
+              fontFamily: aiData.fontFamily || prev.fontFamily
           }));
           
-          if (aiData.id) {
-              setCvId(aiData.id);
-              if (aiData.template_id) setActiveTemplateId(aiData.template_id);
+          if (aiData.id) setCvId(aiData.id);
+          
+          // IMPORTANT: If CV has a template, respect it (unless forced via Store)
+          if (aiData.template_id && !location.state?.forceTemplate) {
+              setActiveTemplateId(aiData.template_id);
+              hasLoadedInitialId.current = true;
           }
-      } else if (user) {
-          setCvData(p => ({...p, fullName: user.fullName || '', email: user.email || ''}));
+      } else if (user && !cvData.fullName) {
+          setCvData(prev => ({...prev, fullName: user.fullName || '', email: user.email || ''}));
       }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, location.state]);
 
+  // 2. LOAD TEMPLATE LIST (Fixed logic to prevent overwrite)
   useEffect(() => {
-      getTemplates().then(setTemplates).catch(err => console.warn("Template Fetch:", err));
-  }, []);
+    getTemplates().then(data => {
+        setTemplates(data);
+        // Only set default to modern IF we haven't already loaded a specific ID
+        if (data.length > 0 && !hasLoadedInitialId.current && activeTemplateId === 'modern') {
+             // Do nothing, let state hold default 'modern'. 
+             // We avoid setActiveTemplateId here to prevent overriding hooks.
+        }
+    }).catch(console.error);
+  }, []); // Run once on mount
 
   const handleSave = async (silent=false) => {
-      if (!user) {
-          alert("⚠️ Session expired. Please log in to save.");
-          return null;
-      }
-      
-      // VALIDATION: Check required fields
-      if (!cvData.fullName || !cvData.email) {
-          alert("⚠️ Name and email are required!");
-          return null;
-      }
-      
+      if(!user) return alert("Log in to save.");
       setIsSaving(true);
       try {
           const payload = {
-              title: `CV - ${cvData.jobTitle || cvData.fullName || 'New'}`,
-              template_id: activeTemplateId,
-              data: { 
-                  ...cvData,
-                  // Ensure all fields are strings, not undefined
-                  fullName: cvData.fullName || '',
-                  email: cvData.email || '',
-                  phone: cvData.phone || '',
-                  jobTitle: cvData.jobTitle || '',
-                  summary: cvData.summary || '',
-                  experience: cvData.experience || '',
-                  education: cvData.education || '',
-                  skills: cvData.skills || ''
-              }
+            title: `Resume - ${cvData.jobTitle || 'New'}`,
+            template_id: activeTemplateId,
+            data: { ...cvData }
           };
-          
-          console.log("💾 Saving payload:", payload);
-          
           const res = await createCV(payload);
           setCvId(res.id);
-          if(!silent) alert(`✅ Saved successfully!`);
+          if (!silent) alert(`✅ CV Saved! ID: ${res.id}`);
+          setIsSaving(false);
           return res.id;
-      } catch(e) {
-          console.error("Save Error:", e);
-          console.error("Error details:", e.response?.data);
-          if(!silent) {
-              const errorMsg = e.response?.data?.detail || e.message || "Unknown error";
-              alert(`❌ Save Failed: ${errorMsg}`);
-          }
+      } catch (err) {
+          if (!silent) alert("Save Failed.");
+          setIsSaving(false);
           return null;
-      } finally { 
-          setIsSaving(false); 
       }
   };
 
-  if(loading) return <div className="loading-screen">Verifying User...</div>;
+  if(loading) return <div>Loading...</div>;
 
   return (
     <div className="App">
       <header className="app-main-header">
-        <button onClick={() => navigate('/')} style={{float:'left', padding:'8px'}}>← Back</button>
-        <h1>AI CV Editor</h1>
-        <div style={{clear:'both', overflowX:'auto'}}>
-            <TemplateSelector 
-              templates={templates} 
-              activeTemplateId={activeTemplateId} 
-              setActiveTemplateId={setActiveTemplateId} 
-              userIsPremium={user?.subscription_plan === 'pro'} 
+        <div style={{display:'flex', alignItems:'center', justifyContent:'center', position:'relative'}}>
+            <button onClick={() => window.location.href='/dashboard'} className="back-dash-btn">
+                ⬅ Dashboard
+            </button>
+            <h1>AI Powered CV Builder</h1>
+        </div>
+        <div style={{overflowX: 'auto', paddingBottom: '5px'}}>
+            <TemplateSelector
+                templates={templates}
+                activeTemplateId={activeTemplateId}
+                setActiveTemplateId={setActiveTemplateId}
+                onOpenStore={() => navigate('/store')} 
             />
         </div>
       </header>
       
       <div className="editor-layout-grid">
-        <div className="form-stack">
-            <ThemeToolbar data={cvData} setData={setCvData} />
-            <CVForm 
-              data={cvData} 
-              setData={setCvData} 
-              customSave={() => handleSave(false)} 
-              isSaving={isSaving} 
-            />
+        <div className="form-stack" style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+           <ThemeToolbar data={cvData} setData={setCvData} />
+           <CVForm data={cvData} setData={setCvData} customSave={()=>handleSave(false)} isSaving={isSaving} />
         </div>
         <div className="preview-stack">
-            <CVPreview 
-              data={cvData} 
-              activeTemplateId={activeTemplateId} 
-              cvId={cvId} 
-              onAutoSaveRequest={() => handleSave(true)} 
-            />
+           <CVPreview data={cvData} activeTemplateId={activeTemplateId} cvId={cvId} onAutoSaveRequest={()=>handleSave(true)} />
         </div>
       </div>
     </div>
