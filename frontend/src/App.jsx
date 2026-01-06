@@ -15,10 +15,14 @@ function App() {
   
   // STATE
   const [cvData, setCvData] = useState({
-      fullName: '', email: '', phone: '', jobTitle: '', summary: '',
-      experience: '', education: '', skills: '',
-      accentColor: '#2c3e50', textColor: '#333333', fontFamily: 'Helvetica, Arial, sans-serif'
-  });
+    fullName: '', email: '', phone: '', jobTitle: '', summary: '',
+    experience: '', education: '', skills: '',
+    // NEW FIELDS
+    location: '', hobbies: '', languages: '', certifications: '',
+    linkedin: '', github: '', portfolio: '',
+    // Styling
+    accentColor: '#2c3e50', textColor: '#333333', fontFamily: 'Helvetica, Arial, sans-serif'
+});
   
   const [templates, setTemplates] = useState([]); 
   const [activeTemplateId, setActiveTemplateId] = useState('modern');

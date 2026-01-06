@@ -32,9 +32,14 @@ const DashboardPage = () => {
   };
 
   const handleEdit = (cv) => {
-    // Navigate to Editor and pass the full CV object via State
-    console.log("✏️ Editing CV:", cv.id);
-    navigate('/editor', { state: { existingCV: cv } });
+    // 🔥 CRITICAL FIX: Pass template_id via forceTemplate
+    console.log("✏️ Editing CV:", cv.id, "Template:", cv.template_id);
+    navigate('/editor', { 
+      state: { 
+        existingCV: cv,
+        forceTemplate: cv.template_id  // ← THIS WAS MISSING!
+      } 
+    });
   };
 
   const handleDelete = async (id) => {
@@ -94,8 +99,12 @@ const DashboardPage = () => {
                 {cvs.map(cv => (
                     <div key={cv.id} className="cv-card">
                         <div className="cv-preview-placeholder">
-                            {/* In future, we can capture thumbnails. For now, visual style. */}
-                            <span className="template-badge">{cv.template_id || 'Modern'}</span>
+                            {/* Enhanced template badge with proper capitalization */}
+                            <span className="template-badge">
+                              {cv.template_id 
+                                ? cv.template_id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+                                : 'Modern'}
+                            </span>
                             <div className="paper-look"></div>
                         </div>
                         <div className="cv-info">
