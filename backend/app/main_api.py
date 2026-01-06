@@ -30,8 +30,6 @@ def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 # ---------------------------------------------------------
 # DATA NORMALIZER (Fixes Validation Errors)
 # ---------------------------------------------------------
-# Replace the normalize_cv_dict function in main_api.py with this version
-
 def normalize_cv_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Converts incoming React JSON (camelCase) to Schema-Compliant (snake_case)
@@ -262,6 +260,60 @@ def create_cv_endpoint(payload: Dict[str, Any], db: Session = Depends(get_db), u
 @router.get("/cvs", response_model=List[cv_schemas.CVInDB])
 def list_cvs_endpoint(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     return cv_crud.get_all_user_cvs(db, int(user["user_id"]))
+
+@router.get("/cvs/{cv_id}")
+def get_cv_endpoint(cv_id: int, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    """
+    Get a single CV by ID (with full data)
+    """
+    db_cv = cv_crud.get_cv(db, cv_id, int(user["user_id"]))
+    if not db_cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+    return db_cv
+
+@router.put("/cvs/{cv_id}")
+def update_cv_endpoint(cv_id: int, payload: Dict[str, Any], db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    """
+    🔥 THE MISSING ENDPOINT - Updates an existing CV
+    """
+    logger.info(f"📝 UPDATE CV Request: cv_id={cv_id}, user={user['user_id']}")
+    
+    # 1. Normalize the incoming data
+    raw_data = payload.get("data", {})
+    clean_dict = normalize_cv_dict(raw_data)
+    
+    try:
+        cv_data_obj = cv_schemas.CVData(**clean_dict)
+    except Exception as e:
+        logger.error(f"Validation Error: {e}")
+        raise HTTPException(status_code=422, detail=f"Invalid Data Structure: {str(e)}")
+
+    # 2. Create update schema
+    cv_update = cv_schemas.CVUpdate(
+        title=payload.get("title"),
+        template_id=payload.get("template_id"),
+        data=cv_data_obj
+    )
+    
+    # 3. Call CRUD update
+    user_id = int(user["user_id"])
+    updated_cv = cv_crud.update_cv(db, cv_id, cv_update, user_id)
+    
+    if not updated_cv:
+        raise HTTPException(status_code=404, detail="CV not found or you don't have permission")
+    
+    logger.info(f"✅ CV Updated: id={cv_id}, template={updated_cv.template_id}")
+    return updated_cv
+
+@router.delete("/cvs/{cv_id}")
+def delete_cv_endpoint(cv_id: int, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    """
+    Delete a CV
+    """
+    success = cv_crud.delete_cv(db, cv_id, int(user["user_id"]))
+    if not success:
+        raise HTTPException(status_code=404, detail="CV not found")
+    return {"success": True, "message": "CV deleted"}
 
 @router.get("/cvs/{cv_id}/export/{type}")
 def export_endpoint(cv_id: int, type: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):

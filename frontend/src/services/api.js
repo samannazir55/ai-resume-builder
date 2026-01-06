@@ -14,7 +14,7 @@ const getBaseUrl = () => {
 };
 
 const API_URL = getBaseUrl();
-console.log("🌍 Connecting API to:", API_URL);
+console.log("🌐 Connecting API to:", API_URL);
 
 const api = axios.create({
     baseURL: API_URL,
@@ -34,7 +34,7 @@ api.interceptors.request.use((config) => {
     return Promise.reject(error);
 });
 
-// --- HELPER FUNCTIONS ---
+// --- AUTH FUNCTIONS ---
 
 export const login = async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
@@ -58,21 +58,52 @@ export const getProfile = async () => {
     return response.data;
 };
 
+// --- TEMPLATE FUNCTIONS ---
+
 export const getTemplates = async () => {
     const response = await api.get('/templates');
     return response.data;
 };
 
+// --- CV FUNCTIONS ---
+
+/**
+ * Create a new CV
+ */
 export const createCV = async (cvData) => {
     const response = await api.post('/cvs', cvData);
     return response.data;
 };
 
+/**
+ * Update an existing CV
+ * @param {string|number} id - CV ID
+ * @param {object} cvData - Updated CV data
+ */
+export const updateCV = async (id, cvData) => {
+    const response = await api.put(`/cvs/${id}`, cvData);
+    return response.data;
+};
+
+/**
+ * Get single CV by ID
+ */
+export const getCV = async (id) => {
+    const response = await api.get(`/cvs/${id}`);
+    return response.data;
+};
+
+/**
+ * Get all CVs for current user
+ */
 export const getCVs = async () => {
     const response = await api.get('/cvs');
     return response.data;
 };
 
+/**
+ * Delete a CV
+ */
 export const deleteCV = async (id) => {
     await api.delete(`/cvs/${id}`);
     return true;
