@@ -5,7 +5,9 @@ import datetime
 class CVData(BaseModel):
     """
     Detail of all structured CV fields (mirrors most frontend form fields).
+    NOW WITH CUSTOM SIDEBAR FIELDS!
     """
+    # Core Fields
     full_name: str
     email: str
     phone: str
@@ -14,8 +16,17 @@ class CVData(BaseModel):
     experience: str
     education: str
     skills: List[str]
-    languages: Optional[str] = None
-    certifications: Optional[str] = None
+    
+    # NEW: Custom Sidebar Fields
+    location: Optional[str] = ""
+    hobbies: Optional[List[str]] = []
+    languages: Optional[List[str]] = []
+    certifications: Optional[List[str]] = []
+    
+    # NEW: Social Links
+    linkedin: Optional[str] = ""
+    github: Optional[str] = ""
+    portfolio: Optional[str] = ""
 
 class CVCreate(BaseModel):
     title: str
@@ -40,19 +51,21 @@ class CVInDB(BaseModel):
 
 class CV(CVInDB):
     data: CVData
+
 class CVList(BaseModel):
     """List of CVs for a user."""
     cvs: List[CV]
 
     class Config:
         orm_mode = True
+
 class CVResponse(BaseModel):
     """Unified response schema for CV operations."""
     success: bool
-    data: Optional[CV] = None  # Data field for successful responses
-    error: Optional[str] = None  # Error message if any
+    data: Optional[CV] = None
+    error: Optional[str] = None
 
     class Config:
         orm_mode = True
-        anystr_strip_whitespace = True  # Automatically strip whitespace from strings
-        use_enum_values = True  # Use enum values instead of enum names in the output
+        anystr_strip_whitespace = True
+        use_enum_values = True

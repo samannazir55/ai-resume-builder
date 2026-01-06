@@ -30,15 +30,19 @@ def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 # ---------------------------------------------------------
 # DATA NORMALIZER (Fixes Validation Errors)
 # ---------------------------------------------------------
+# Replace the normalize_cv_dict function in main_api.py with this version
+
 def normalize_cv_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Converts incoming React JSON (camelCase) to Schema-Compliant (snake_case)
     dictionary that matches the 'CVData' Pydantic model structure.
+    NOW WITH CUSTOM FIELDS SUPPORT!
     """
     normalized: Dict[str, Any] = {}
 
     # 1. Key Mapping (React -> Schema)
     key_map = {
+        # Basic Fields
         "fullName": "full_name",
         "jobTitle": "job_title",
         "phone": "phone",
@@ -47,8 +51,17 @@ def normalize_cv_dict(data: Dict[str, Any]) -> Dict[str, Any]:
         "experience": "experience",
         "education": "education",
         "skills": "skills",
+        
+        # NEW: Custom Sidebar Fields
+        "location": "location",
+        "hobbies": "hobbies",
         "languages": "languages",
-        "certifications": "certifications"
+        "certifications": "certifications",
+        
+        # NEW: Social Links
+        "linkedin": "linkedin",
+        "github": "github",
+        "portfolio": "portfolio"
     }
 
     # Transfer existing keys
@@ -60,13 +73,13 @@ def normalize_cv_dict(data: Dict[str, Any]) -> Dict[str, Any]:
         elif k in ["accentColor", "textColor", "fontFamily"]:
             normalized[k] = v
 
-    # 2. Strict Defaults
+    # 2. Strict Defaults for Required Fields
     required_str_fields = ["full_name", "email", "phone", "job_title", "summary", "experience", "education"]
     for field in required_str_fields:
         if field not in normalized or normalized[field] is None:
             normalized[field] = ""
     
-    # 3. Handle Lists (Skills)
+    # 3. Handle Skills List
     skills_raw = normalized.get("skills")
     if isinstance(skills_raw, str):
         if skills_raw.strip():
@@ -76,11 +89,27 @@ def normalize_cv_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     elif not isinstance(skills_raw, list):
         normalized["skills"] = []
 
-    # 4. Generate Initials
+    # 4. NEW: Handle Custom Lists (Hobbies, Languages, Certifications)
+    for list_field in ["hobbies", "languages", "certifications"]:
+        field_raw = normalized.get(list_field)
+        if isinstance(field_raw, str):
+            if field_raw.strip():
+                normalized[list_field] = [s.strip() for s in field_raw.split(',') if s.strip()]
+            else:
+                normalized[list_field] = []
+        elif not isinstance(field_raw, list):
+            normalized[list_field] = []
+
+    # 5. NEW: Handle Optional String Fields
+    for str_field in ["location", "linkedin", "github", "portfolio"]:
+        if str_field not in normalized or normalized[str_field] is None:
+            normalized[str_field] = ""
+
+    # 6. Generate Initials
     name = normalized.get("full_name", "")
     normalized["full_name_initials"] = name[:2].upper() if name else "??"
 
-    # 5. Fix Accent Colors
+    # 7. Fix Accent Colors
     if "accentColor" in normalized: normalized["accent_color"] = normalized["accentColor"]
     if "textColor" in normalized: normalized["text_color"] = normalized["textColor"]
     if "fontFamily" in normalized: normalized["font_family"] = normalized["fontFamily"]

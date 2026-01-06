@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'; // Added useRef
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/useAuth';
 import api, { getTemplates, createCV } from './services/api';
@@ -25,31 +25,50 @@ function App() {
   const [cvId, setCvId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Use a Ref to track if we have force-loaded an ID to prevent overrides
-  const hasLoadedInitialId = useRef(false);
+  // CRITICAL FIX: Track if we've already processed location.state to prevent reset
+  const hasProcessedLocation = useRef(false);
 
-  // 1. DATA LOAD ENGINE
+  // 1. LOAD TEMPLATES FIRST (Before processing navigation state)
   useEffect(() => {
+    getTemplates()
+      .then(data => {
+        setTemplates(data);
+        console.log('✅ Templates loaded:', data.length);
+      })
+      .catch(err => console.error('❌ Template load error:', err));
+  }, []); // Run once on mount
+
+  // 2. PROCESS NAVIGATION STATE & DATA LOAD (With proper priority)
+  useEffect(() => {
+      // Prevent re-processing if we've already handled this navigation
+      if (hasProcessedLocation.current) return;
+      
       let incoming = null;
       try {
           const s = sessionStorage.getItem('aiResult');
           if (s && s !== 'undefined') incoming = JSON.parse(s);
-      } catch (e) { sessionStorage.removeItem('aiResult'); }
+      } catch (e) { 
+          sessionStorage.removeItem('aiResult'); 
+      }
 
       if (!incoming) incoming = location.state?.generatedContent;
       if (!incoming) incoming = location.state?.existingCV;
       
-      // Check for forced template via store navigation
+      // 🔥 CRITICAL FIX: Check for forced template FIRST (highest priority)
       if (location.state?.forceTemplate) {
-          console.log("💎 Forced Template via Store:", location.state.forceTemplate);
+          console.log("💎 FORCE TEMPLATE from Store:", location.state.forceTemplate);
           setActiveTemplateId(location.state.forceTemplate);
-          hasLoadedInitialId.current = true;
+          hasProcessedLocation.current = true;
+          
+          // Clear the navigation state so it doesn't re-trigger
+          navigate(location.pathname, { replace: true, state: {} });
+          return; // Exit early, don't process other data
       }
 
       const aiData = (incoming && incoming.data) ? incoming.data : incoming;
 
       if (aiData) {
-          console.log("📥 Editor Loading:", aiData);
+          console.log("🔥 Editor Loading Data:", aiData);
           const processExp = (val) => Array.isArray(val) ? val.map(p => `• ${p}`).join('\n') : (val || '');
           const processSkill = (val) => Array.isArray(val) ? val.join(', ') : (val || '');
 
@@ -70,27 +89,23 @@ function App() {
           
           if (aiData.id) setCvId(aiData.id);
           
-          // IMPORTANT: If CV has a template, respect it (unless forced via Store)
-          if (aiData.template_id && !location.state?.forceTemplate) {
+          // If CV has a template, use it
+          if (aiData.template_id) {
+              console.log("📋 Using CV's template:", aiData.template_id);
               setActiveTemplateId(aiData.template_id);
-              hasLoadedInitialId.current = true;
           }
+          
+          hasProcessedLocation.current = true;
       } else if (user && !cvData.fullName) {
-          setCvData(prev => ({...prev, fullName: user.fullName || '', email: user.email || ''}));
+          // No incoming data, just populate with user info
+          setCvData(prev => ({
+              ...prev, 
+              fullName: user.fullName || '', 
+              email: user.email || ''
+          }));
+          hasProcessedLocation.current = true;
       }
-  }, [user, location.state]);
-
-  // 2. LOAD TEMPLATE LIST (Fixed logic to prevent overwrite)
-  useEffect(() => {
-    getTemplates().then(data => {
-        setTemplates(data);
-        // Only set default to modern IF we haven't already loaded a specific ID
-        if (data.length > 0 && !hasLoadedInitialId.current && activeTemplateId === 'modern') {
-             // Do nothing, let state hold default 'modern'. 
-             // We avoid setActiveTemplateId here to prevent overriding hooks.
-        }
-    }).catch(console.error);
-  }, []); // Run once on mount
+  }, [location.state, user]); // Re-run when location.state or user changes
 
   const handleSave = async (silent=false) => {
       if(!user) return alert("Log in to save.");
