@@ -2,11 +2,22 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './TemplateSelector.css';
 
-const TemplateSelector = ({ templates, activeTemplateId, setActiveTemplateId, userIsPremium }) => {
+const TemplateSelector = ({ templates, activeTemplateId, setActiveTemplateId, currentData, cvId }) => {
   const navigate = useNavigate();
-  // Filter for the carousel: Free OR already active premium ones (if user unlocked them)
-  // For simplicty: Just free + specific Button
+  
+  // Only show free templates in the quick selector
   const freeTemplates = templates.filter(t => !t.is_premium);
+  const premiumCount = templates.filter(t => t.is_premium).length;
+
+  const handleBrowseClick = () => {
+    // Pass current data to template store to preserve it
+    navigate('/store', {
+      state: {
+        existingData: currentData,
+        cvId: cvId
+      }
+    });
+  };
 
   return (
     <div className="template-selector-container">
@@ -24,13 +35,22 @@ const TemplateSelector = ({ templates, activeTemplateId, setActiveTemplateId, us
           </div>
         ))}
         
-        {/* THE CALL TO ACTION BUTTON */}
-        <div className="template-card special-store-card" onClick={() => navigate('/store')}>
-            <div className="template-preview-image" style={{background: '#333', color:'#FFF'}}>+</div>
-            <p className="template-name">Browse Premium ({templates.filter(t=>t.is_premium).length})</p>
+        {/* Enhanced Call-to-Action Card */}
+        <div className="template-card special-store-card" onClick={handleBrowseClick}>
+          <div className="template-preview-image premium-gradient">
+            <span style={{fontSize: '40px'}}>✨</span>
+          </div>
+          <p className="template-name">
+            <strong>Browse All</strong>
+            <br/>
+            <span style={{fontSize: '11px', color: '#94a3b8'}}>
+              {premiumCount} Premium + {freeTemplates.length} Free
+            </span>
+          </p>
         </div>
       </div>
     </div>
   );
 };
+
 export default TemplateSelector;

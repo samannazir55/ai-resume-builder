@@ -40,7 +40,7 @@ function App() {
       .catch(err => console.error('❌ Template load error:', err));
   }, []);
 
-  // 2. PROCESS NAVIGATION STATE - FIXED VERSION
+  // 2. PROCESS NAVIGATION STATE - FIXED VERSION WITH DATA PRESERVATION
   useEffect(() => {
     // Only process if this is a new navigation (different location.key)
     if (processedLocationKey.current === location.key) {
@@ -82,6 +82,17 @@ function App() {
         console.error('Session storage parse error:', e);
         sessionStorage.removeItem('aiResult');
       }
+    }
+
+    // 🔥 CRITICAL: If only template is being changed (no new data), preserve current data
+    if (forceTemplate && !incomingData && cvData.fullName) {
+      console.log('🔄 Template switch detected - preserving existing data');
+      setActiveTemplateId(forceTemplate);
+      processedLocationKey.current = location.key;
+      if (location.state) {
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+      return; // Exit early - don't wipe data
     }
 
     // PROCESS THE DATA
@@ -201,18 +212,39 @@ function App() {
   return (
     <div className="App">
       <header className="app-main-header">
-        <div style={{display:'flex', alignItems:'center', justifyContent:'center', position:'relative'}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', position:'relative', width: '100%'}}>
           <button onClick={() => window.location.href='/dashboard'} className="back-dash-btn">
             ⬅️ Dashboard
           </button>
-          <h1>AI Powered CV Builder</h1>
+          <h1 style={{flex: 1, textAlign: 'center'}}>AI Powered CV Builder</h1>
+          <button 
+            onClick={() => navigate('/store', { 
+              state: { 
+                existingData: cvData,
+                cvId: cvId 
+              } 
+            })} 
+            className="browse-templates-btn"
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            🎨 Browse Templates
+          </button>
         </div>
         <div style={{overflowX: 'auto', paddingBottom: '5px'}}>
           <TemplateSelector
             templates={templates}
             activeTemplateId={activeTemplateId}
             setActiveTemplateId={setActiveTemplateId}
-            onOpenStore={() => navigate('/store')} 
+            currentData={cvData}
+            cvId={cvId}
           />
         </div>
       </header>
