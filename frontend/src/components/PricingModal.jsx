@@ -1,72 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/useAuth';
+import api from '../services/api';
 import './PricingModal.css';
 
 const PricingModal = ({ onClose, onSuccess }) => {
-  const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+  const [packages, setPackages] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const handlePurchase = (plan) => {
-    setLoading(true);
-    // SIMULATE STRIPE DELAY
-    setTimeout(() => {
-        setLoading(false);
-        alert(`🎉 Payment Successful! You are now on the ${plan} Plan.`);
-        onSuccess(); // Trigger the unlock
-        onClose();   // Close modal
-    }, 2000);
+  // LOAD PACKAGES FROM ADMIN SETTINGS
+  useEffect(() => {
+      api.get('/admin/packages').then(res => {
+          setPackages(res.data.filter(p => p.is_active));
+          setLoading(false);
+      }).catch(err => {
+          console.error("Failed to load pricing", err);
+          setLoading(false);
+      });
+  }, []);
+
+  const handlePurchase = (pkg) => {
+      if (pkg.payment_link) {
+          window.open(pkg.payment_link, '_blank');
+          // For MVP, assume success for demo flow if needed, 
+          // or ideally waiting for webhook (out of scope for today)
+          // user clicks 'I have paid' button logic could go here
+      } else {
+          alert("Payment link not configured for this package yet.");
+      }
   };
 
   return (
     <div className="pricing-overlay">
       <div className="pricing-content">
         <button className="close-btn" onClick={onClose}>×</button>
-        
         <div className="pricing-header">
-            <h2>🚀 Unlock Your Career Potential</h2>
-            <p>Select a plan to access Premium Templates and Advanced AI.</p>
+            <h2>🛒 Resume Store</h2>
+            <p>Your Balance: <span style={{color:'#667eea', fontWeight:'bold'}}>{user?.credits || 0} Credits</span></p>
         </div>
 
-        <div className="pricing-grid">
-            {/* FREE TIER */}
-            <div className="price-card basic">
-                <div className="tag">STARTER</div>
-                <h3>Free</h3>
-                <div className="price">$0<span>/mo</span></div>
-                <ul>
-                    <li>✅ 3 Basic Templates</li>
-                    <li>✅ Standard PDF Export</li>
-                    <li>❌ Manual Watermark</li>
-                    <li>❌ AI Improvements</li>
-                </ul>
-                <button className="plan-btn outline" disabled>Current Plan</button>
+        {loading ? <div style={{textAlign:'center'}}>Loading Deals...</div> : (
+            <div className="pricing-grid">
+                {packages.map(pkg => (
+                    <div key={pkg.id} className="price-card pro">
+                        {pkg.badge && <div className="tag popular">{pkg.badge}</div>}
+                        <h3>${pkg.price}</h3>
+                        <div className="credits-display">{pkg.credits} Credits</div>
+                        <p style={{fontSize:'13px', color:'#666'}}>{pkg.description}</p>
+                        
+                        <button className="plan-btn fill" onClick={() => handlePurchase(pkg)}>
+                            Buy Now
+                        </button>
+                    </div>
+                ))}
             </div>
-
-            {/* PRO TIER */}
-            <div className="price-card pro">
-                <div className="tag popular">MOST POPULAR</div>
-                <h3>Pro Access</h3>
-                <div className="price">$9.99<span>/mo</span></div>
-                <ul>
-                    <li>💎 <b>Access 50+ Premium Templates</b></li>
-                    <li>🧠 Unlimited AI Re-Writes</li>
-                    <li>📄 No Watermarks</li>
-                    <li>🚀 Priority Support</li>
-                </ul>
-                <button 
-                    className="plan-btn fill" 
-                    onClick={() => handlePurchase('PRO')}
-                    disabled={loading}
-                >
-                    {loading ? "Processing..." : "Upgrade Now"}
-                </button>
-            </div>
-        </div>
-        
-        <p className="guarantee">🔒 Secure payment powered by Stripe. Cancel anytime.</p>
+        )}
       </div>
     </div>
   );
 };
-
 export default PricingModal;

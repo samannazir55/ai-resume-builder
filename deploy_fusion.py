@@ -1,181 +1,99 @@
 import os
 
-app_jsx_path = "frontend/src/App.jsx"
+main_api_path = os.path.join("backend", "app", "main_api.py")
 
-app_code = """import { useState, useEffect, useRef } from 'react'; // Added useRef
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from './context/useAuth';
-import api, { getTemplates, createCV } from './services/api';
-import './App.css';
-import CVForm from './components/CVForm';
-import CVPreview from './components/CVPreview';
-import TemplateSelector from './components/TemplateSelector';
-import ThemeToolbar from './components/ThemeToolbar';
+# The Logic Block to Insert (Same as before, just stored correctly)
+enhanced_setup_code = """
+# ==========================================
+# ⚡ SUPER SETUP ROUTE (Schema Migration + Seeding)
+# ==========================================
+from sqlalchemy import text
 
-function App() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { user, loading } = useAuth();
-  
-  // STATE
-  const [cvData, setCvData] = useState({
-      fullName: '', email: '', phone: '', jobTitle: '', summary: '',
-      experience: '', education: '', skills: '',
-      accentColor: '#2c3e50', textColor: '#333333', fontFamily: 'Helvetica, Arial, sans-serif'
-  });
-  
-  const [templates, setTemplates] = useState([]); 
-  const [activeTemplateId, setActiveTemplateId] = useState('modern');
-  const [cvId, setCvId] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  
-  // Use a Ref to track if we have force-loaded an ID to prevent overrides
-  const hasLoadedInitialId = useRef(false);
+@router.get("/setup_production")
+def setup_production_db(db: Session = Depends(get_db)):
+    from .models.template import Template
+    from .models.package import Package
+    
+    log = []
+    
+    # 1. MIGRATE SCHEMA (Add 'credits' if missing)
+    try:
+        # Check column existence
+        check = db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='credits'"))
+        if not check.fetchone():
+            db.execute(text("ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 3"))
+            db.commit()
+            log.append("✅ Migrated: Added credits wallet.")
+        else:
+            log.append("ℹ️ Wallet ready.")
+    except Exception as e:
+        log.append(f"⚠️ Schema: {e}")
 
-  // 1. DATA LOAD ENGINE
-  useEffect(() => {
-      let incoming = null;
-      try {
-          const s = sessionStorage.getItem('aiResult');
-          if (s && s !== 'undefined') incoming = JSON.parse(s);
-      } catch (e) { sessionStorage.removeItem('aiResult'); }
+    # 2. SEED PACKAGES
+    try:
+        if db.query(Package).count() == 0:
+            seed_pkgs = [
+                Package(name="Quick Start", price=250.0, credits=1, description="One single download", badge="BASIC", payment_link="#"),
+                Package(name="Pro Career", price=1500.0, credits=10, description="Unlimited edits 1 mo", badge="POPULAR", payment_link="#"),
+            ]
+            db.add_all(seed_pkgs)
+            db.commit()
+            log.append("✅ Seeded Money Packages.")
+    except Exception as e:
+        log.append(f"❌ Package Error: {e}")
 
-      if (!incoming) incoming = location.state?.generatedContent;
-      if (!incoming) incoming = location.state?.existingCV;
-      
-      // Check for forced template via store navigation
-      if (location.state?.forceTemplate) {
-          console.log("💎 Forced Template via Store:", location.state.forceTemplate);
-          setActiveTemplateId(location.state.forceTemplate);
-          hasLoadedInitialId.current = true;
-      }
-
-      const aiData = (incoming && incoming.data) ? incoming.data : incoming;
-
-      if (aiData) {
-          console.log("📥 Editor Loading:", aiData);
-          const processExp = (val) => Array.isArray(val) ? val.map(p => `• ${p}`).join('\\n') : (val || '');
-          const processSkill = (val) => Array.isArray(val) ? val.join(', ') : (val || '');
-
-          setCvData(prev => ({
-              ...prev,
-              fullName: aiData.full_name || user?.fullName || prev.fullName,
-              email: aiData.email || user?.email || prev.email,
-              phone: aiData.phone || prev.phone,
-              jobTitle: aiData.desired_job_title || prev.jobTitle,
-              summary: aiData.professional_summary || prev.summary,
-              education: aiData.education_formatted || prev.education,
-              experience: processExp(aiData.experience_points || aiData.experience),
-              skills: processSkill(aiData.suggested_skills || aiData.skills),
-              accentColor: aiData.accentColor || prev.accentColor,
-              textColor: aiData.textColor || prev.textColor,
-              fontFamily: aiData.fontFamily || prev.fontFamily
-          }));
-          
-          if (aiData.id) setCvId(aiData.id);
-          
-          // IMPORTANT: If CV has a template, respect it (unless forced via Store)
-          if (aiData.template_id && !location.state?.forceTemplate) {
-              setActiveTemplateId(aiData.template_id);
-              hasLoadedInitialId.current = true;
-          }
-      } else if (user && !cvData.fullName) {
-          setCvData(prev => ({...prev, fullName: user.fullName || '', email: user.email || ''}));
-      }
-  }, [user, location.state]);
-
-  // 2. LOAD TEMPLATE LIST (Fixed logic to prevent overwrite)
-  useEffect(() => {
-    getTemplates().then(data => {
-        setTemplates(data);
-        // Only set default to modern IF we haven't already loaded a specific ID
-        if (data.length > 0 && !hasLoadedInitialId.current && activeTemplateId === 'modern') {
-             // Do nothing, let state hold default 'modern'. 
-             // We avoid setActiveTemplateId here to prevent overriding hooks.
+    # 3. SEED TEMPLATES
+    templates_data = [
+        {
+            "id": "modern", "name": "Modern Blue", "category": "professional", "is_premium": False,
+            "html": "<div class='resume-modern'><div class='sidebar'><div class='profile-container'>{{#profile_image}}<img src='{{profile_image}}' class='profile-img'/>{{/profile_image}}<h1>{{full_name}}</h1><p class='job-title'>{{job_title}}</p></div><div class='contact-box'><div class='label'>Contact</div><div class='value'>{{email}}</div><div class='value'>{{phone}}</div></div><div class='skills-box'><div class='label'>Skills</div><ul>{{#skills}}<li>{{.}}</li>{{/skills}}</ul></div></div><div class='main-content'><div class='section'><h2>Profile</h2><div class='text'>{{{summary}}}</div></div><div class='section'><h2>Experience</h2><div class='text history-list'>{{{experience}}}</div></div><div class='section'><h2>Education</h2><div class='text history-list'>{{{education}}}</div></div></div></div>",
+            "css": ".resume-modern{display:flex;font-family:sans-serif;height:100%;min-height:1000px;background:white;color:#333}.sidebar{width:35%;background:var(--primary, #2c3e50);color:white;padding:30px 20px;text-align:center}.main-content{width:65%;padding:30px}.profile-img{width:120px;height:120px;border-radius:50%;border:4px solid rgba(255,255,255,0.2);object-fit:cover;margin-bottom:10px}h1{font-size:22px;margin:10px 0 5px 0;text-transform:uppercase}.job-title{font-size:14px;opacity:0.9;margin-bottom:30px}.label{font-weight:bold;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:5px;margin:20px 0 10px 0;font-size:12px}.skills-box li{background:rgba(0,0,0,0.2);margin-bottom:5px;padding:5px;border-radius:3px;font-size:12px}h2{color:var(--primary, #2c3e50);border-bottom:2px solid var(--primary, #2c3e50);padding-bottom:5px;text-transform:uppercase;margin-top:0}.text{font-size:14px;line-height:1.6;margin-bottom:20px} .history-list p { margin:5px 0; }"
+        },
+        {
+            "id": "classic", "name": "Classic Clean", "category": "simple", "is_premium": False,
+            "html": "<div class='resume-classic'><div class='header'><h1>{{full_name}}</h1><p>{{job_title}}</p><p class='contact'>{{email}} | {{phone}}</p></div><hr/><h3>Professional Summary</h3><p class='summary'>{{{summary}}}</p><h3>Skills</h3><div class='skills-grid'>{{#skills}}<span class='skill-item'>{{.}}</span>{{/skills}}</div><h3>Experience</h3><div class='content'>{{{experience}}}</div><h3>Education</h3><div class='content'>{{{education}}}</div></div>",
+            "css": ".resume-classic{font-family:'Times New Roman',serif;padding:40px;background:white;color:#000;min-height:1000px}.header{text-align:center;margin-bottom:20px}h1{margin:0;font-size:28px;text-transform:uppercase;letter-spacing:2px}.header p{margin:5px 0;font-style:italic}h3{background:#f0f0f0;padding:5px 10px;text-transform:uppercase;font-size:14px;font-weight:bold;border-left:5px solid #333;margin-top:20px}.skills-grid{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}.skill-item{border:1px solid #333;padding:3px 8px;font-size:13px}ul{padding-left:20px}"
+        },
+        {
+            "id": "startup_bold", "name": "Startup Bold", "category": "creative", "is_premium": True,
+            "html": "<div class='resume-start'><div class='start-sidebar'><h1>{{full_name}}</h1><h3>{{job_title}}</h3>{{#profile_image}}<div class='start-img-container'><img src='{{profile_image}}'/></div>{{/profile_image}}<div class='start-group'><div class='start-label'>Contact</div><div>{{email}}</div><div>{{phone}}</div></div><div class='start-group'><div class='start-label'>Skills</div><div class='tag-cloud'>{{#skills}}<span class='tag'>{{.}}</span>{{/skills}}</div></div></div><div class='start-body'><h2 class='shadow-head'>Manifesto</h2><div class='content'>{{{summary}}}</div><h2 class='shadow-head'>Experience</h2><div class='content'>{{{experience}}}</div><h2 class='shadow-head'>Education</h2><div class='content'>{{{education}}}</div></div></div>",
+            "css": ":root{--primary: {{accent_color}};} .resume-start{display:flex;font-family:sans-serif;min-height:1000px;background:#fff;width:100%;overflow:hidden;position:relative}.start-sidebar{width:35%;background:#111;color:white;padding:40px 20px;text-align:center}.start-body{width:65%;padding:40px;position:relative}.start-img-container img{width:150px!important;height:150px!important;border-radius:50%;border:4px solid var(--primary);object-fit:cover;margin:0 auto 30px;display:block}.start-label{font-size:11px;text-transform:uppercase;color:#888;border-bottom:1px solid #333;margin-bottom:5px}.tag{display:inline-block;background:#333;padding:4px 8px;border-radius:4px;margin:2px;font-size:11px}.shadow-head{font-size:24px;color:#333;text-transform:uppercase;font-weight:800;border-left:5px solid var(--primary);padding-left:15px;margin:0 0 20px}.blob{position:absolute;top:-50px;right:-50px;width:200px;height:200px;background:var(--primary);border-radius:50%;opacity:0.1}"
         }
-    }).catch(console.error);
-  }, []); // Run once on mount
+    ]
 
-  const handleSave = async (silent=false) => {
-      if(!user) return alert("Log in to save.");
-      setIsSaving(true);
-      try {
-          const payload = {
-            title: `Resume - ${cvData.jobTitle || 'New'}`,
-            template_id: activeTemplateId,
-            data: { ...cvData }
-          };
-          const res = await createCV(payload);
-          setCvId(res.id);
-          if (!silent) alert(`✅ CV Saved! ID: ${res.id}`);
-          setIsSaving(false);
-          return res.id;
-      } catch (err) {
-          if (!silent) alert("Save Failed.");
-          setIsSaving(false);
-          return null;
-      }
-  };
-
-  if(loading) return <div>Loading...</div>;
-
-  return (
-    <div className="App">
-      <header className="app-main-header">
-        <div style={{display:'flex', alignItems:'center', justifyContent:'center', position:'relative'}}>
-            <button onClick={() => window.location.href='/dashboard'} className="back-dash-btn">
-                ⬅ Dashboard
-            </button>
-            <h1>AI Powered CV Builder</h1>
-        </div>
-        <div style={{overflowX: 'auto', paddingBottom: '5px'}}>
-            <TemplateSelector
-                templates={templates}
-                activeTemplateId={activeTemplateId}
-                setActiveTemplateId={setActiveTemplateId}
-                onOpenStore={() => navigate('/store')} 
-            />
-        </div>
-      </header>
-      
-      <div className="editor-layout-grid">
-        <div className="form-stack" style={{display:'flex', flexDirection:'column', gap:'20px'}}>
-           <ThemeToolbar data={cvData} setData={setCvData} />
-           <CVForm data={cvData} setData={setCvData} customSave={()=>handleSave(false)} isSaving={isSaving} />
-        </div>
-        <div className="preview-stack">
-           <CVPreview data={cvData} activeTemplateId={activeTemplateId} cvId={cvId} onAutoSaveRequest={()=>handleSave(true)} />
-        </div>
-      </div>
-    </div>
-  );
-}
-export default App;
-"""
-
-# Include new CSS for that dashboard button just in case
-extra_css = """
-.back-dash-btn {
-    position: absolute; left: 0; 
-    padding: 8px 16px; background: rgba(255,255,255,0.2); 
-    border: 1px solid rgba(255,255,255,0.4); 
-    color: white; border-radius: 6px; 
-    cursor: pointer; font-weight: 500; font-size: 0.9rem;
-    display: flex; align-items: center; gap: 5px;
-    transition: 0.2s;
-}
-.back-dash-btn:hover { background: rgba(255,255,255,0.3); }
+    for data in templates_data:
+        existing = db.query(Template).filter(Template.id == data["id"]).first()
+        if not existing:
+            db.add(Template(**data))
+            log.append(f"➕ Template {data['name']} added.")
+        else:
+            existing.html_content = data["html"]
+            existing.css_styles = data["css"]
+            
+    db.commit()
+    return {"status": "success", "logs": log}
 """
 
 try:
-    with open(app_jsx_path, "w", encoding="utf-8") as f:
-        f.write(app_code)
+    with open(main_api_path, "r", encoding="utf-8") as f:
+        content = f.read()
     
-    with open("frontend/src/App.css", "a", encoding="utf-8") as f:
-        f.write(extra_css)
+    if "@router.get(\"/setup_production\")" in content:
+        # We perform a targeted removal of the old function to avoid duplication errors
+        # Split at the router declaration
+        parts = content.split('@router.get("/setup_production")')
         
-    print("✅ App.jsx Patch: Fixed the 'Modern Reset' bug.")
-    print("   If you select 'Ivy League' in store, it will STAY selected in editor.")
+        # Keep the top part (imports etc)
+        new_content = parts[0] + "\n" + enhanced_setup_code
+        
+        with open(main_api_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        print("✅ setup_production Route Updated.")
+    else:
+        # Append if not found
+        with open(main_api_path, "a", encoding="utf-8") as f:
+            f.write("\n" + enhanced_setup_code)
+        print("✅ setup_production Route Created.")
 
 except Exception as e:
     print(f"❌ Error: {e}")
