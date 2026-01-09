@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Response
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, cast
 from sqlalchemy.orm import Session
 import jinja2
 import logging
@@ -18,6 +18,7 @@ from .schemas import user as user_schemas, cv as cv_schemas, ai as ai_schemas, t
 from .crud import user as user_crud, cv as cv_crud, template as template_crud
 from .core import security, config
 from .services import ai_service, parser_service, file_service
+from .models.package import Package
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 router = APIRouter()
@@ -329,6 +330,37 @@ def export_endpoint(cv_id: int, type: str, db: Session = Depends(get_db), user: 
     else:
         cv_dict = dict(data_source) # type: ignore
 
+    # Ensure we have a Dict[str, Any] and decode any bytes keys/values that may exist.
+    def _ensure_str_keys(o: Any) -> Any:
+        if isinstance(o, dict):
+            new = {}
+            for k, v in o.items():
+                if isinstance(k, (bytes, bytearray)):
+                    try:
+                        key = k.decode("utf-8")
+                    except Exception:
+                        key = k.decode("latin-1", errors="ignore")
+                else:
+                    key = k if isinstance(k, str) else str(k)
+                new[key] = _ensure_str_keys(v)
+            return new
+        if isinstance(o, list):
+            return [_ensure_str_keys(i) for i in o]
+        if isinstance(o, (bytes, bytearray)):
+            try:
+                return o.decode("utf-8")
+            except Exception:
+                return o.decode("latin-1", errors="ignore")
+        return o
+
+    try:
+        if not isinstance(cv_dict, dict):
+            cv_dict = dict(cv_dict)  # type: ignore
+    except Exception:
+        cv_dict = {}
+
+    cv_dict = _ensure_str_keys(cv_dict)
+
     template_id_str = str(db_cv.template_id)
     tmpl = template_crud.get_template(db, template_id_str)
     if not tmpl: 
@@ -337,11 +369,11 @@ def export_endpoint(cv_id: int, type: str, db: Session = Depends(get_db), user: 
     if not tmpl: raise HTTPException(404, "Default Template missing")
 
     if type == 'pdf':
-        pdf_bytes = file_service.create_pdf_from_template(tmpl.html_content, tmpl.css_styles, cv_dict)
+        pdf_bytes = file_service.create_pdf_from_template(cast(str, tmpl.html_content), cast(str, tmpl.css_styles), cv_dict)
         return Response(content=pdf_bytes, media_type="application/pdf")
             
     elif type == 'html':
-        full_html = render_template_internal(tmpl.html_content, tmpl.css_styles, cv_dict)
+        full_html = render_template_internal(cast(str, tmpl.html_content), cast(str, tmpl.css_styles), cv_dict)
         return Response(content=full_html, media_type="text/html")
         
     elif type == 'docx':
@@ -369,7 +401,7 @@ def generate_pdf_direct(payload: Dict[str, Any], db: Session = Depends(get_db)):
         tmpl = template_crud.get_template(db, "modern")
 
     if tmpl:
-        full_html = render_template_internal(tmpl.html_content, tmpl.css_styles, raw_data)
+        full_html = render_template_internal(cast(str, tmpl.html_content), cast(str, tmpl.css_styles), raw_data)
         return Response(content=full_html, media_type="text/html")
     
     return Response(content="<h1>Template Error</h1>", media_type="text/html")
@@ -478,3 +510,49 @@ def setup_production_db(db: Session = Depends(get_db)):
             
     db.commit()
     return {"status": "success", "logs": log}
+# Package CRUD endpoints
+@router.get("/admin/packages")
+def get_packages(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    if user.get("email") != config.settings.ADMIN_EMAIL: 
+        raise HTTPException(403, "Admin only")
+    return db.query(Package).all()
+
+@router.post("/admin/packages")
+def create_package(pkg: dict, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    if user.get("email") != config.settings.ADMIN_EMAIL: 
+        raise HTTPException(403, "Admin only")
+    new_pkg = Package(**pkg)
+    db.add(new_pkg)
+    db.commit()
+    db.refresh(new_pkg)
+    return new_pkg
+
+@router.put("/admin/packages/{pkg_id}")
+def update_package(pkg_id: int, pkg: dict, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    if user.get("email") != config.settings.ADMIN_EMAIL: 
+        raise HTTPException(403, "Admin only")
+    db_pkg = db.query(Package).filter(Package.id == pkg_id).first()
+    if not db_pkg: raise HTTPException(404)
+    for key, val in pkg.items():
+        setattr(db_pkg, key, val)
+    db.commit()
+    return db_pkg
+
+@router.delete("/admin/packages/{pkg_id}")
+def delete_package(pkg_id: int, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    if user.get("email") != config.settings.ADMIN_EMAIL: 
+        raise HTTPException(403, "Admin only")
+    db.query(Package).filter(Package.id == pkg_id).delete()
+    db.commit()
+    return {"success": True}
+
+# Payment instructions endpoints
+@router.get("/admin/payment-instructions")
+def get_instructions(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    # Store in a settings table or return from config
+    return {"instructions": ""}
+
+@router.post("/admin/payment-instructions")
+def save_instructions(data: dict, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    # Save to settings table
+    return {"success": True}
