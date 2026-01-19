@@ -37,8 +37,8 @@ const AdminPage = () => {
   /* =========================
      TEMPLATE STATE
   ========================= */
-  const [_templates, setTemplates] = useState([]);
-  const [_showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   const [templateForm, setTemplateForm] = useState({
     id: '',
@@ -50,14 +50,6 @@ const AdminPage = () => {
   });
 
   /* =========================
-     EFFECTS
-  ========================= */
-  useEffect(() => {
-    if (activeTab === 'packages') loadPackages();
-    if (activeTab === 'templates') loadTemplates();
-  }, [activeTab, loadPackages, loadTemplates]);
-
-  /* =========================
      UTILITIES
   ========================= */
   const showStatus = (message, type) => {
@@ -65,7 +57,7 @@ const AdminPage = () => {
     setTimeout(() => setStatus({ message: '', type: '' }), 5000);
   };
 
-  const _getBadgeClass = (badge) => {
+  const getBadgeClass = (badge) => {
     if (!badge) return 'badge-default';
     const b = badge.toLowerCase();
     if (b.includes('popular')) return 'badge-popular';
@@ -137,7 +129,7 @@ const AdminPage = () => {
     setEditingPackage(null);
   };
 
-  const _openEditPackage = (pkg) => {
+  const openEditPackage = (pkg) => {
     setEditingPackage(pkg);
     setPackageForm(pkg);
 
@@ -173,7 +165,7 @@ const AdminPage = () => {
     }
   }, []);
 
-  const _saveTemplate = async (e) => {
+  const saveTemplate = async (e) => {
     e.preventDefault();
     try {
       await api.post('/admin/templates', templateForm);
@@ -196,6 +188,15 @@ const AdminPage = () => {
       css_styles: ''
     });
   };
+
+  /* =========================
+     EFFECTS
+  ========================= */
+  useEffect(() => {
+    if (activeTab === 'packages') loadPackages();
+    if (activeTab === 'templates') loadTemplates();
+  }, [activeTab]); // Removed loadPackages and loadTemplates from dependencies
+
   /* =========================
      AUTH GUARD
   ========================= */
@@ -208,6 +209,99 @@ const AdminPage = () => {
       </div>
     );
   }
+
+  /* =========================
+     RENDER TAB CONTENT
+  ========================= */
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <div>
+            <h1>📊 Dashboard</h1>
+            <div className="dashboard-stats">
+              <div className="stat-card">
+                <h3>Total Packages</h3>
+                <p className="stat-number">{packages.length}</p>
+              </div>
+              <div className="stat-card">
+                <h3>Total Templates</h3>
+                <p className="stat-number">{templates.length}</p>
+              </div>
+              <div className="stat-card">
+                <h3>Active Packages</h3>
+                <p className="stat-number">
+                  {packages.filter(p => p.is_active).length}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'packages':
+        return (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h1>📦 Packages</h1>
+              <button
+                className="btn-primary"
+                onClick={() => setShowPackageModal(true)}
+              >
+                ➕ New Package
+              </button>
+            </div>
+            <div className="packages-list">
+              {packages.map((pkg) => (
+                <div key={pkg.id} className="package-card">
+                  <h3>{pkg.name}</h3>
+                  <p>${pkg.price_usd} - {pkg.credits} credits</p>
+                  <p>{pkg.description}</p>
+                  {pkg.badge && (
+                    <span className={getBadgeClass(pkg.badge)}>{pkg.badge}</span>
+                  )}
+                  <button onClick={() => openEditPackage(pkg)}>Edit</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case 'templates':
+        return (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h1>🎨 Templates</h1>
+              <button
+                className="btn-primary"
+                onClick={() => setShowTemplateModal(true)}
+              >
+                ➕ New Template
+              </button>
+            </div>
+            <div className="templates-list">
+              {templates.map((tmpl) => (
+                <div key={tmpl.id} className="template-card">
+                  <h3>{tmpl.name}</h3>
+                  <p>Category: {tmpl.category}</p>
+                  <p>{tmpl.is_premium ? '⭐ Premium' : '🆓 Free'}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case 'settings':
+        return (
+          <div>
+            <h1>⚙️ Settings</h1>
+            <p>Settings panel coming soon...</p>
+          </div>
+        );
+
+      default:
+        return <div>Select a tab</div>;
+    }
+  };
 
   /* =========================
      MAIN RENDER
@@ -251,6 +345,8 @@ const AdminPage = () => {
             {status.message}
           </div>
         )}
+        
+        {renderTabContent()}
       </div>
 
       {/* ================= PACKAGE MODAL ================= */}
@@ -303,6 +399,35 @@ const AdminPage = () => {
                 <button
                   type="button"
                   onClick={() => setShowPackageModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= TEMPLATE MODAL ================= */}
+      {showTemplateModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => setShowTemplateModal(false)}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <form onSubmit={saveTemplate}>
+              <h2>➕ Create Template</h2>
+              
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateModal(false)}
                 >
                   Cancel
                 </button>
