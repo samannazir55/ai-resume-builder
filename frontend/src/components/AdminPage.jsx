@@ -39,6 +39,7 @@ const AdminPage = () => {
   ========================= */
   const [templates, setTemplates] = useState([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(null);
 
   const [templateForm, setTemplateForm] = useState({
     id: '',
@@ -73,8 +74,9 @@ const AdminPage = () => {
     try {
       const res = await api.get('/admin/packages');
       setPackages(res.data);
-    } catch {
+    } catch (error) {
       showStatus('Failed to load packages', 'error');
+      console.error(error);
     }
   }, []);
 
@@ -149,6 +151,17 @@ const AdminPage = () => {
     setShowPackageModal(true);
   };
 
+  const deletePackage = async (id) => {
+    if (!confirm('Delete this package?')) return;
+    try {
+      await api.delete(`/admin/packages/${id}`);
+      showStatus('✅ Package deleted', 'success');
+      loadPackages();
+    } catch (err) {
+      showStatus('Failed to delete package', 'error');
+    }
+  };
+
   const removeRegionalLink = (idx) => {
     setRegionalLinks(regionalLinks.filter((_, i) => i !== idx));
   };
@@ -160,16 +173,22 @@ const AdminPage = () => {
     try {
       const res = await api.get('/templates');
       setTemplates(res.data);
-    } catch {
+    } catch (error) {
       showStatus('Failed to load templates', 'error');
+      console.error(error);
     }
   }, []);
 
   const saveTemplate = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/admin/templates', templateForm);
-      showStatus('✅ Template saved', 'success');
+      if (editingTemplate) {
+        await api.put(`/admin/templates/${editingTemplate.id}`, templateForm);
+        showStatus('✅ Template updated', 'success');
+      } else {
+        await api.post('/admin/templates', templateForm);
+        showStatus('✅ Template saved', 'success');
+      }
       setShowTemplateModal(false);
       resetTemplateForm();
       loadTemplates();
@@ -187,6 +206,31 @@ const AdminPage = () => {
       html_content: '',
       css_styles: ''
     });
+    setEditingTemplate(null);
+  };
+
+  const openEditTemplate = (tmpl) => {
+    setEditingTemplate(tmpl);
+    setTemplateForm({
+      id: tmpl.id,
+      name: tmpl.name,
+      category: tmpl.category,
+      is_premium: tmpl.is_premium,
+      html_content: tmpl.html_content || '',
+      css_styles: tmpl.css_styles || ''
+    });
+    setShowTemplateModal(true);
+  };
+
+  const deleteTemplate = async (id) => {
+    if (!confirm('Delete this template?')) return;
+    try {
+      await api.delete(`/admin/templates/${id}`);
+      showStatus('✅ Template deleted', 'success');
+      loadTemplates();
+    } catch (err) {
+      showStatus('Failed to delete template', 'error');
+    }
   };
 
   /* =========================
@@ -195,7 +239,7 @@ const AdminPage = () => {
   useEffect(() => {
     if (activeTab === 'packages') loadPackages();
     if (activeTab === 'templates') loadTemplates();
-  }, [activeTab]); // Removed loadPackages and loadTemplates from dependencies
+  }, [activeTab]);
 
   /* =========================
      AUTH GUARD
@@ -205,6 +249,7 @@ const AdminPage = () => {
       <div className="cms-container">
         <div className="cms-main center">
           <h1>🔒 Admin Access Required</h1>
+          <button onClick={() => window.location.href = '/login'}>Go to Login</button>
         </div>
       </div>
     );
@@ -245,23 +290,38 @@ const AdminPage = () => {
               <h1>📦 Packages</h1>
               <button
                 className="btn-primary"
-                onClick={() => setShowPackageModal(true)}
+                onClick={() => {
+                  resetPackageForm();
+                  setShowPackageModal(true);
+                }}
               >
                 ➕ New Package
               </button>
             </div>
             <div className="packages-list">
-              {packages.map((pkg) => (
-                <div key={pkg.id} className="package-card">
-                  <h3>{pkg.name}</h3>
-                  <p>${pkg.price_usd} - {pkg.credits} credits</p>
-                  <p>{pkg.description}</p>
-                  {pkg.badge && (
-                    <span className={getBadgeClass(pkg.badge)}>{pkg.badge}</span>
-                  )}
-                  <button onClick={() => openEditPackage(pkg)}>Edit</button>
-                </div>
-              ))}
+              {packages.length === 0 ? (
+                <p>No packages found. Click "New Package" to create one.</p>
+              ) : (
+                packages.map((pkg) => (
+                  <div key={pkg.id} className="package-card">
+                    <h3>{pkg.name}</h3>
+                    <p>${pkg.price_usd} - {pkg.credits} credits</p>
+                    <p>{pkg.description}</p>
+                    {pkg.badge && (
+                      <span className={getBadgeClass(pkg.badge)}>{pkg.badge}</span>
+                    )}
+                    <div style={{marginTop: '15px', display: 'flex', gap: '10px'}}>
+                      <button onClick={() => openEditPackage(pkg)}>Edit</button>
+                      <button 
+                        className="btn-danger" 
+                        onClick={() => deletePackage(pkg.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         );
@@ -273,19 +333,36 @@ const AdminPage = () => {
               <h1>🎨 Templates</h1>
               <button
                 className="btn-primary"
-                onClick={() => setShowTemplateModal(true)}
+                onClick={() => {
+                  resetTemplateForm();
+                  setShowTemplateModal(true);
+                }}
               >
                 ➕ New Template
               </button>
             </div>
             <div className="templates-list">
-              {templates.map((tmpl) => (
-                <div key={tmpl.id} className="template-card">
-                  <h3>{tmpl.name}</h3>
-                  <p>Category: {tmpl.category}</p>
-                  <p>{tmpl.is_premium ? '⭐ Premium' : '🆓 Free'}</p>
-                </div>
-              ))}
+              {templates.length === 0 ? (
+                <p>No templates found.</p>
+              ) : (
+                templates.map((tmpl) => (
+                  <div key={tmpl.id} className="template-card">
+                    <h3>{tmpl.name}</h3>
+                    <p>ID: {tmpl.id}</p>
+                    <p>Category: {tmpl.category}</p>
+                    <p>{tmpl.is_premium ? '⭐ Premium' : '🆓 Free'}</p>
+                    <div style={{marginTop: '15px', display: 'flex', gap: '10px'}}>
+                      <button onClick={() => openEditTemplate(tmpl)}>Edit</button>
+                      <button 
+                        className="btn-danger" 
+                        onClick={() => deleteTemplate(tmpl.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         );
@@ -294,7 +371,10 @@ const AdminPage = () => {
         return (
           <div>
             <h1>⚙️ Settings</h1>
-            <p>Settings panel coming soon...</p>
+            <div style={{background: 'white', padding: '30px', borderRadius: '12px'}}>
+              <p>Settings panel coming soon...</p>
+              <p>Logged in as: <strong>{user.email}</strong></p>
+            </div>
           </div>
         );
 
@@ -364,36 +444,137 @@ const AdminPage = () => {
                 {editingPackage ? '✏️ Edit Package' : '➕ Create Package'}
               </h2>
 
-              {regionalLinks.map((region, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start'
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <strong>
-                      {region.code} - {region.name}
-                    </strong>
-                    {region.link && <div>Link: {region.link}</div>}
-                    {region.instructions && (
-                      <div style={{ whiteSpace: 'pre-line' }}>
-                        {region.instructions}
-                      </div>
-                    )}
-                  </div>
+              <div>
+                <label>Package Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={packageForm.name}
+                  onChange={(e) => setPackageForm({...packageForm, name: e.target.value})}
+                  placeholder="e.g., Pro Career"
+                />
+              </div>
 
-                  <button
-                    type="button"
-                    className="btn-danger"
-                    onClick={() => removeRegionalLink(idx)}
-                  >
-                    Remove
-                  </button>
+              <div>
+                <label>Price (USD) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={packageForm.price_usd}
+                  onChange={(e) => setPackageForm({...packageForm, price_usd: e.target.value})}
+                  placeholder="e.g., 1500"
+                />
+              </div>
+
+              <div>
+                <label>Credits *</label>
+                <input
+                  type="number"
+                  required
+                  value={packageForm.credits}
+                  onChange={(e) => setPackageForm({...packageForm, credits: parseInt(e.target.value)})}
+                  placeholder="e.g., 10"
+                />
+              </div>
+
+              <div>
+                <label>Description</label>
+                <textarea
+                  value={packageForm.description}
+                  onChange={(e) => setPackageForm({...packageForm, description: e.target.value})}
+                  placeholder="Package description..."
+                  rows="3"
+                />
+              </div>
+
+              <div>
+                <label>Badge</label>
+                <input
+                  type="text"
+                  value={packageForm.badge}
+                  onChange={(e) => setPackageForm({...packageForm, badge: e.target.value})}
+                  placeholder="e.g., POPULAR, HOT, NEW"
+                />
+              </div>
+
+              <div>
+                <label>Stripe Payment Link</label>
+                <input
+                  type="url"
+                  value={packageForm.stripe_payment_link}
+                  onChange={(e) => setPackageForm({...packageForm, stripe_payment_link: e.target.value})}
+                  placeholder="https://buy.stripe.com/..."
+                />
+              </div>
+
+              <div>
+                <label>LemonSqueezy Link</label>
+                <input
+                  type="url"
+                  value={packageForm.lemonsqueezy_link}
+                  onChange={(e) => setPackageForm({...packageForm, lemonsqueezy_link: e.target.value})}
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div>
+                <label>Paddle Product ID</label>
+                <input
+                  type="text"
+                  value={packageForm.paddle_product_id}
+                  onChange={(e) => setPackageForm({...packageForm, paddle_product_id: e.target.value})}
+                  placeholder="prod_xxx"
+                />
+              </div>
+
+              <div>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={packageForm.is_active}
+                    onChange={(e) => setPackageForm({...packageForm, is_active: e.target.checked})}
+                  />
+                  {' '}Active
+                </label>
+              </div>
+
+              {regionalLinks.length > 0 && (
+                <div style={{marginTop: '20px'}}>
+                  <h3>Regional Links</h3>
+                  {regionalLinks.map((region, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        padding: '10px',
+                        background: '#f5f5f5',
+                        borderRadius: '6px',
+                        marginBottom: '10px'
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <strong>{region.code} - {region.name}</strong>
+                        {region.link && <div>Link: {region.link}</div>}
+                        {region.instructions && (
+                          <div style={{ whiteSpace: 'pre-line', fontSize: '12px' }}>
+                            {region.instructions}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-danger"
+                        onClick={() => removeRegionalLink(idx)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
 
               <div className="modal-footer">
                 <button
@@ -403,7 +584,7 @@ const AdminPage = () => {
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary">
-                  Save
+                  Save Package
                 </button>
               </div>
             </form>
@@ -420,10 +601,84 @@ const AdminPage = () => {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
+            style={{maxWidth: '800px'}}
           >
             <form onSubmit={saveTemplate}>
-              <h2>➕ Create Template</h2>
-              
+              <h2>
+                {editingTemplate ? '✏️ Edit Template' : '➕ Create Template'}
+              </h2>
+
+              <div>
+                <label>Template ID *</label>
+                <input
+                  type="text"
+                  required
+                  value={templateForm.id}
+                  onChange={(e) => setTemplateForm({...templateForm, id: e.target.value})}
+                  placeholder="e.g., modern_blue"
+                  disabled={!!editingTemplate}
+                />
+                <small style={{color: '#666'}}>Unique identifier (cannot be changed after creation)</small>
+              </div>
+
+              <div>
+                <label>Template Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={templateForm.name}
+                  onChange={(e) => setTemplateForm({...templateForm, name: e.target.value})}
+                  placeholder="e.g., Modern Blue"
+                />
+              </div>
+
+              <div>
+                <label>Category *</label>
+                <select
+                  value={templateForm.category}
+                  onChange={(e) => setTemplateForm({...templateForm, category: e.target.value})}
+                >
+                  <option value="professional">Professional</option>
+                  <option value="creative">Creative</option>
+                  <option value="simple">Simple</option>
+                  <option value="modern">Modern</option>
+                </select>
+              </div>
+
+              <div>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={templateForm.is_premium}
+                    onChange={(e) => setTemplateForm({...templateForm, is_premium: e.target.checked})}
+                  />
+                  {' '}Premium Template
+                </label>
+              </div>
+
+              <div>
+                <label>HTML Content *</label>
+                <textarea
+                  required
+                  value={templateForm.html_content}
+                  onChange={(e) => setTemplateForm({...templateForm, html_content: e.target.value})}
+                  placeholder="<div>Your template HTML here...</div>"
+                  rows="10"
+                  style={{fontFamily: 'monospace', fontSize: '13px'}}
+                />
+              </div>
+
+              <div>
+                <label>CSS Styles</label>
+                <textarea
+                  value={templateForm.css_styles}
+                  onChange={(e) => setTemplateForm({...templateForm, css_styles: e.target.value})}
+                  placeholder=".template { ... }"
+                  rows="10"
+                  style={{fontFamily: 'monospace', fontSize: '13px'}}
+                />
+              </div>
+
               <div className="modal-footer">
                 <button
                   type="button"
@@ -432,7 +687,7 @@ const AdminPage = () => {
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary">
-                  Save
+                  Save Template
                 </button>
               </div>
             </form>
