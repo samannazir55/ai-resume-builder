@@ -48,8 +48,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <Route path="/" element={<ProtectedRoute><ChatGeneratorPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
               <Route path="/store" element={<ProtectedRoute><TemplateStore /></ProtectedRoute>} />
-<Route path="/editor" element={<ProtectedRoute><App /></ProtectedRoute>} />
-              <Route path="/admin/new" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+              <Route path="/editor" element={<ProtectedRoute><App /></ProtectedRoute>} />
+              
+              {/* ADMIN - Single route, tabs handled internally */}
+              <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
