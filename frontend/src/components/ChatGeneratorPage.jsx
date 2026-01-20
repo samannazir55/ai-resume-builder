@@ -12,15 +12,14 @@ const ChatGeneratorPage = () => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [uploadedCVText, setUploadedCVText] = useState(""); // Store extracted CV text
 
   useEffect(() => {
     // Only greet if empty history
     if (messages.length === 0 && user) {
-        const greeting = `Hi ${user.fullName ? user.fullName.split(' ')[0] : 'friend'}! I'm your AI Resume Architect. 🧠\n\nI can write from scratch, OR you can click 📎 to upload an old CV! \n\nFirst: What is your target **Job Title**?`;
+        const greeting = `Hi ${user.fullName ? user.fullName.split(' ')[0] : 'friend'}! I'm your AI Resume Architect. 🧠\n\nI can write from scratch, OR you can click 📎 to upload an old CV!\n\nFirst: What is your target **Job Title**?`;
         setMessages([{ sender: 'bot', text: greeting }]);
     }
-    // Disable warning for dependencies: logic requires running only once or when user loads
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]); 
 
   useEffect(() => {
@@ -37,10 +36,19 @@ const ChatGeneratorPage = () => {
     setIsTyping(true);
 
     try {
-        const apiHistory = newHistory.slice(-10).map(m => ({
+        // Build API history - include CV context if available
+        let apiHistory = newHistory.slice(-10).map(m => ({
             role: m.sender === 'user' ? 'user' : 'assistant',
             content: m.text
         }));
+
+        // If CV was uploaded, prepend it to the conversation context
+        if (uploadedCVText) {
+            apiHistory = [
+                { role: 'system', content: `User has uploaded their CV. Extracted content:\n${uploadedCVText}` },
+                ...apiHistory
+            ];
+        }
 
         const response = await api.post('/ai/chat', {
             history: apiHistory,
@@ -60,7 +68,6 @@ const ChatGeneratorPage = () => {
 
     } catch (err) {
         setIsTyping(false);
-        // Clean error usage
         console.warn("Chat Error:", err); 
         setMessages(prev => [...prev, { sender: 'bot', text: "❌ Connection Error. Backend might be offline." }]);
     }
@@ -77,20 +84,36 @@ const ChatGeneratorPage = () => {
     fd.append('file', file);
     
     try {
-        // Strict header override
-        const res = await api.post('/ai/upload-resume', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        const res = await api.post('/ai/upload-resume', fd, { 
+            headers: { 'Content-Type': 'multipart/form-data' } 
+        });
         
-        // Pass context to AI logic hidden from UI
-        const contextMsg = `SYSTEM: User uploaded CV. TEXT: ${res.data.extracted_text.substring(0, 3000)}`;
+        const extractedText = res.data.extracted_text || "";
         
-        // Ping Chat logic to analyze it
+        // Store the CV text for future messages
+        setUploadedCVText(extractedText.substring(0, 3000));
+        
+        // Create a proper context message for the AI
+        const contextMessage = `I just uploaded my CV. Please analyze it and tell me what you found. Here's the content:\n\n${extractedText.substring(0, 2000)}`;
+        
+        // Build history with the uploaded CV context
+        const apiHistory = [
+            ...messages.map(m => ({ 
+                role: m.sender === 'user' ? 'user' : 'assistant', 
+                content: m.text 
+            })),
+            { role: 'user', content: `📎 Uploaded ${file.name}` }
+        ];
+        
+        // Ask AI to analyze the uploaded CV
         const chatRes = await api.post('/ai/chat', {
-            history: messages.map(m => ({ role: m.sender==='user'?'user':'assistant', content: m.text })),
-            message: contextMsg
+            history: apiHistory,
+            message: contextMessage
         });
         
         setIsTyping(false);
         const { reply, action, cv_data } = chatRes.data;
+        
         setMessages(prev => [...prev, { sender: 'bot', text: reply }]);
         
         if (action === 'generate') {
@@ -102,7 +125,7 @@ const ChatGeneratorPage = () => {
     } catch (err) {
         setIsTyping(false);
         console.error(err);
-        setMessages(prev => [...prev, { sender: 'bot', text: "❌ Upload failed." }]);
+        setMessages(prev => [...prev, { sender: 'bot', text: "❌ Upload failed. Please try again." }]);
     }
   };
 

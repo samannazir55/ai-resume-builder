@@ -419,6 +419,33 @@ def get_single_template(id: str, db: Session = Depends(get_db)):
     if not t: raise HTTPException(404, "Template not found")
     return t
 
+@router.delete("/admin/templates/{template_id}")
+def delete_template_endpoint(
+    template_id: str, 
+    db: Session = Depends(get_db), 
+    user: dict = Depends(get_current_user)
+):
+    """
+    Delete a template (Admin only)
+    """
+    # Check if user is admin
+    if user.get("email") != config.settings.ADMIN_EMAIL:
+        raise HTTPException(403, "Admin Access Required")
+    
+    # Get the template
+    template = template_crud.get_template(db, template_id)
+    if not template:
+        raise HTTPException(404, "Template not found")
+    
+    # Delete the template
+    try:
+        db.delete(template)
+        db.commit()
+        return {"success": True, "message": f"Template {template_id} deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Failed to delete template: {str(e)}")
+    
 @router.post("/admin/templates", response_model=template_schemas.Template)
 def admin_create(t: template_schemas.TemplateCreate, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     if user.get("email") != config.settings.ADMIN_EMAIL: 
